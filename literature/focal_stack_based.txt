@@ -1,0 +1,42 @@
+******deep depth from focus with differential focal volume by Yang et.al(CVPR2022)*******
+
+focal stack : to obtain a well focused image, digital cameras take many photos at a time with varying focal lengths. 
+		the stack of these images are called focal stack. 
+image context can be another cue to estimate depth. But we sould need to build scene-specific models
+
+
+other technique : Depth From Defocus (DFD) - try to build a mathematical model between the depth and defocus pattern
+		 assume a point in centralized in a small planner region and the point spread fuction (PSF) assumes a 
+		certain destribution. But these assumptions oftern fail in the real world
+technique from this paper : Depth From Focus (DFF)
+			Assumes that one and only one frame conains a best focused image of a certain pixel and 
+			the respective focal lenght of this frame is the depth of this pixel.
+
+challenges :
+how to measure the quality of focus ?
+how to deal with textureless surfaces ? (focal measures does not work well when the surfaces are textureless)
+in these cases we might want to resprt to contexual details
+high sampling frequency requirement :
+	if the imaged point falls within the depth of field of the camera, there should be one sharp pixel in the 
+	focal stack. But if the sampling rate of the camera is too low we might not get this image in the 
+	focal stack. 
+
+main idea:
+	use CNN to learn a deep focus measure
+	the features learned by the CNN can also represent contexual information.
+	So this method uses both focal measure and context information for performing DFF
+
+
+why is this method related to stereo matching?
+Depth of field (DoF) ?
+Cicle of Confusion (CoC)?
+
+
+******notes/ideas*******
+source of error of the keypoint based p4p problem that I tried:
+*if focal length is not equal to the distance to the hand, the keypoints will be blured and 
+the location will be erroneous
+
+
+
+
