@@ -13,3 +13,11 @@ in the screen session
 6. run visdom server and detach from screen : Ctrl+a and the press d
 7. Goto sources directory of defocus net
 8. python run_train.py
+
+## How to use Docker 
+remove images and containers 
+https://www.digitalocean.com/community/tutorials/how-to-remove-docker-images-containers-and-volumes
+
+general usage of Docker 
+https://www.pluralsight.com/guides/create-docker-images-docker-hub
+
