@@ -21,3 +21,13 @@ https://www.digitalocean.com/community/tutorials/how-to-remove-docker-images-con
 general usage of Docker 
 https://www.pluralsight.com/guides/create-docker-images-docker-hub
 
+
+## Using Spyder from remote machine
+Guide: 
+https://docs.spyder-ide.org/current/panes/ipythonconsole.html?highlight=ssh#connect-to-a-remote-kernel
+
+## copy files from Rivanna to local machine
+scp my_file mst3k@rivanna.hpc.virginia.edu:/project/mygroup_name
+
+
+
