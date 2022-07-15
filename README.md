@@ -27,7 +27,7 @@ Guide:
 https://docs.spyder-ide.org/current/panes/ipythonconsole.html?highlight=ssh#connect-to-a-remote-kernel
 
 ## copy files from Rivanna to local machine
-scp my_file mst3k@rivanna.hpc.virginia.edu:/project/mygroup_name
+scp mst3k@rivanna.hpc.virginia.edu:/project/mygroup_name/my_file /my_directory
 
 
 
