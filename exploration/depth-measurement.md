@@ -15,12 +15,12 @@ https://github.com/dvl-tum/defocus-net
 
 Then seperate plots were generated of different values of $S_2$
 
-![alt text](d-Coc-vs-s1 s2=0.05.png)
-![alt text](d-Coc-vs-s1 s2=0.1.png)
-![alt text](d-Coc-vs-s1 s2=0.8.png)
-![alt text](d-Coc-vs-s1 s2=1.0.png)
-![alt text](d-Coc-vs-s1 s2=1.5.png)
-![alt text](d-Coc-vs-s1 s2=2.0.png)
+![alt text](d-Coc-vs-s1-s2=0.05.png)
+![alt text](d-Coc-vs-s1-s2=0.1.png)
+![alt text](d-Coc-vs-s1-s2=0.8.png)
+![alt text](d-Coc-vs-s1-s2=1.0.png)
+![alt text](d-Coc-vs-s1-s2=1.5.png)
+![alt text](d-Coc-vs-s1-s2=2.0.png)
 
 
 
