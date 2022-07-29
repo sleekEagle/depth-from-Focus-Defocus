@@ -30,7 +30,7 @@ How does the derivative varry with $S_2$ ? We plot the average derivative of $Co
 
 ![alt text](avg_der.png)
 
-From this plot, we can see that the robustness of the estimation of $S_2$ is higher for lower distances and diminishes when the distance decreases. 
+From this plot, we can see that the robustness of the estimation of $S_2$ is higher for lower distances and diminishes when the distance increases. 
 
 
 
