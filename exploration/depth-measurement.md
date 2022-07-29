@@ -23,6 +23,13 @@ If we plan to measure $S_2$ given $CoC$, the sections with high slope in the abo
 ![alt text](d-Coc-vs-s1-s2=1.5.png)
 ![alt text](d-Coc-vs-s1-s2=2.0.png)
 
+We can see that high derivatives are available when $S_1$ values are lower. So if we are trying to estimate 
+$S_2$, we can give more weight to the estimations derived from lower $S_1$ values. 
+
+How does the derivative varry with $S_2$ ? We plot the average derivative of $CoC$ (averaged over different $S1$ values)
+
+![alt text](avg_der.png)
+
 
 
 
