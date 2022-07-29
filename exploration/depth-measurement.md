@@ -3,7 +3,7 @@
 The radius of the Circle of Confusion (CoC) depends on other parameters according to the following equation: \
 
 
-$$|S2-S1|F^2 \over S1N(S1-f) $$
+$$|S_2-S_1|F^2 \over S_1N(S1-f) $$
 
 
  
