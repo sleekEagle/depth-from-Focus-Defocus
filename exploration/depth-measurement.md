@@ -1,4 +1,12 @@
 # Analyzing depth equation 
+
+The radius of the Circle of Confusion (CoC) depends on other parameters according to the following equation: \
+
+
+$$a \over b $$
+
+
+ 
 When $a \ne 0$, there are two solutions to $(ax^2 + bx + c = 0)$ and they are 
 $$ x = {-b \pm \sqrt{b^2-4ac} \over 2a} $$
 
