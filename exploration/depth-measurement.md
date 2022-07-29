@@ -11,7 +11,7 @@ and $N$ is the f-number of the lense.
 The variation of $CoC$ vs $S_1$ for different values of $S_2$ can be plot as the figure bellow. This was plot for the camera parameters used to generate the synthetic dataset for the paper "Focus on defocus: bridging the synthetic to real domain gap for depth estimation" by Maximov et.al (2020). These parameter and the dataset can be found at \
 https://github.com/dvl-tum/defocus-net
 
-![alt text](Coc-vs-s1.png)
+![alt text](Coc-vs-s2.png)
 
 If we plan to measure $S_2$ given $CoC$, the sections with high slope in the above curves give better values of $S_2$. This is because, if the slope is low, a small change in $CoC$ such as noise can have a large impact on the estimated $S_2$ value. To see the variation of the derivation of $CoC$ w.r.t. $S_2$, we plot it vs $S_1$. 
 
