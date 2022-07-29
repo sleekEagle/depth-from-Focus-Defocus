@@ -11,7 +11,7 @@ and $N$ is the f-number of the lense.
 The variation of $CoC$ vs $S_1$ for different values of $S_2$ can be plot as the figure bellow. This was plot for the camera parameters used to generate the synthetic dataset for the paper "Focus on defocus: bridging the synthetic to real domain gap for depth estimation" by Maximov et.al (2020). These parameter and the dataset can be found at \
 https://github.com/dvl-tum/defocus-net
 
-![alt text](Coc-vs-s1.png)
+![alt text](Coc-vs-s1.png =250x250)
 
 Then seperate plots were generated of different values of $S_2$
 
