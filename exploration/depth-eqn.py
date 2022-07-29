@@ -9,10 +9,10 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 
-s1 = np.linspace(0.1,2.0,100)
+s2 = np.linspace(0.1,2.0,100)
 f=2.9 * 1e-3
 N=1.0
-s2=0.05
+s1=0.05
 
 # setting the axes at the centre
 fig = plt.figure()
@@ -23,21 +23,21 @@ plt.xlim(0,2.0)
 #plt.ylim(0,5)
 plt.xlim(0,2.0)
 lines=[]
-s2_vals=[0.05,0.1,0.5,1.0,2.0]
-for s2 in s2_vals:
+s1_vals=[0.05,0.1,0.5,1.0,2.0]
+for s1 in s1_vals:
     c=abs(s2-s1)/(s2*N*(s1-f))*np.square(f)
-    l,=ax.plot(s1,c)
+    l,=ax.plot(s2,c)
     lines.append(l)
-ax.legend(lines,[str(v) for v in s2_vals],loc='upper right')
-ax.set_xlabel("S1")
+ax.legend(lines,[str(v) for v in s1_vals],loc='upper right')
+ax.set_xlabel("S2")
 ax.set_ylabel("CoC radius")
-ax.set_title('CoC radius vs S1 for different S2 values')
-fig.savefig('/home/sleekeagle/vuzix/depth-from-Focus-Defocus/exploration/Coc-vs-s1.png',bbox_inches='tight',dpi=1200)
+ax.set_title('CoC radius vs S2 for different S1 values')
+fig.savefig('/home/sleekeagle/vuzix/depth-from-Focus-Defocus/exploration/Coc-vs-s2.png',bbox_inches='tight',dpi=1200)
 
 '''
 plot the abs value of derivative of CoC wrt S2
 '''
-
+s1 = np.linspace(0.1,2.0,100)
 # setting the axes at the centre
 fig = plt.figure()
 ax = fig.add_subplot(1, 1, 1)
