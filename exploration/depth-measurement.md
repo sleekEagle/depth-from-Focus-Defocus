@@ -3,7 +3,7 @@
 The radius of the Circle of Confusion (CoC) depends on other parameters according to the following equation:
 
 
-$$CoC={|S_2-S_1|f^2} \over S_1N(S_1-f) $$
+$$CoC={|S_2-S_1|f^2 \over S_1N(S_1-f)} $$
 
 where $S_1$ is the focal distance, $S_2$ is the distance to the object point, $f$ is the focal length \
 and $N$ is the f-number of the lense.
