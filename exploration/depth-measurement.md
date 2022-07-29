@@ -12,7 +12,7 @@ The variation of $CoC$ vs $S_1$ for different values of $S_2$ can be plot as the
 https://github.com/dvl-tum/defocus-net
 
 ![alt text](Coc-vs-s1.png | width=100)
-<img scr="Coc-vs-s1.png" width="200" height="200">
+<img scr="Coc-vs-s1.png" width="500" height="500">
 
 Then seperate plots were generated of different values of $S_2$
 
