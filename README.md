@@ -34,13 +34,13 @@ for each dataset, divide focal distances and distances by the max(focal distance
 ### FoD500
 focal distance : [0.1-1.5] \
 normalized focal distance : [0.06667-1] \
-distance : [0.1-2.83] //
+distance : [0.1-2.83] \
 Normalized distance : [0.0667-1.893] 
 
 ### DDFF12
-focal distance : [0.02-0.28] //
-normalized focal distance : [0.0714-1] //
-distance : [0-0.3817] //
+focal distance : [0.02-0.28] \
+normalized focal distance : [0.0714-1] \
+distance : [0-0.3817] \
 Normalized distance : [0-1.3633]
 
 
