@@ -32,8 +32,8 @@ scp mst3k@rivanna.hpc.virginia.edu:/project/mygroup_name/my_file /my_directory
 ## Datasets and normalization 
 for each dataset, divide focal distances and distances by the max(focal distance)
 ### FoD500
-focal distance : [0.1-1.5] \\
-normalized focal distance : [0.06667-1] //
+focal distance : [0.1-1.5] \
+normalized focal distance : [0.06667-1] \
 distance : [0.1-2.83] //
 Normalized distance : [0.0667-1.893] 
 
