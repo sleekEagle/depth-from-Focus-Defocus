@@ -46,9 +46,9 @@ Normalized distance : [0-1.3633] \
 after clipping : [min(norm focal d) - max(norm focal d)] = [0.0714 - 1]
 
 ## Evaluate 
-'''
+```
 python eval_DDFF12.py --stack_num 5 --loadmodel  /scratch/lnw8px/depth-from-Focus-Defocus/models/fdf/1632/FoD500_DDFF12_scale0.2_nsck5_lr1e-06_ep700_b20_lvl4/best.tar --use_diff 0 --outdir /scratch/lnw8px/depth-from-Focus-Defocus/models/fdf/1632/FoD500_DDFF12_scale0.2_nsck5_lr1e-06_ep700_b20_lvl4/ --data_path  /scratch/lnw8px/depth-from-Focus-Defocus/data/my_ddff_trainVal.h5 --dkernel 3 --dpool 0 --dchlist 10 16 32 1 --fuse 1
-'''
+```
 
 
 
