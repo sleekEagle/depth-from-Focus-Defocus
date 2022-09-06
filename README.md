@@ -3,7 +3,7 @@
 ## Running in RIvanna 
 1. log into Rivanna with SSH
 2. start GPU interactive (ijob) session 
-ijob -c 1 -A stressresearch -p gpu --gres=gpu --time=2400
+ijob -c 1 -A cyberphysicalsystems -p gpu --gres=gpu --time=2400
 3. pull the docker image from docker hub
 4. run image with Singularity
 singularity shell --writable-tmpfs --nv focus-defocus_latest.sif
