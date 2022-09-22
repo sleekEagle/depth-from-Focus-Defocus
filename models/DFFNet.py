@@ -8,9 +8,35 @@ from models.featExactor2 import FeatExactor
 
 
 # Ours-FV (use_diff=0) and Ours-DFV (use_diff=1) model
+x=torch.rand((1,5))
+focal_dist=torch.rand((1,5))
+input=torch.cat([x,focal_dist],dim=1)
+lin1=nn.Linear(10,1)
+lin1(input)
+
+
+class disparityNetLin(nn.Module):
+    def __init__(self,n_fs):
+        super(disparityNetLin, self).__init__()
+        self.n_fs=n_fs
+        self.lin1=nn.Linear(n_fs*2,1)
+
+    def forward(self, x, focal_dist=None):
+        input=torch.cat([x,focal_dist],dim=1)
+        out=self.lin1(input)
+        return out
+        
+dmodel=disparityNetLin(5)
+dmodel(x,focal_dist)
+       
+        
 
 class DFFNet(nn.Module):
-    def __init__(self, clean,level=1, use_diff=1,dkernel=(3,3),dchlist=[10,64,1],dpool=False,dconv_stride=(1,1),dpool_stride=(2,2),dbias=False,dsigmoid=False,fuse=0):
+    #disp_mode : how to get distance from focal_score/blur
+        #0 - disparity regression from DFV paper
+        #1 - our linear NN
+        #2 - our CNN
+    def __init__(self,clean,level=1,use_diff=1,fuse=0,disp_mode=0):
         super(DFFNet, self).__init__()
 
         self.clean = clean
@@ -18,6 +44,7 @@ class DFFNet(nn.Module):
         self.level = level
         self.fuse=fuse
         self.sig=nn.Sigmoid()
+        self.disp_mode=disp_mode
 
         self.use_diff = use_diff
         assert level >= 1 and level <= 4
@@ -40,6 +67,7 @@ class DFFNet(nn.Module):
 
         # reg
         self.disp_reg = disparityregression(1)
+        self.disp_net=disparityNetLin(5)
         
         #depth
         dlayers=[]
@@ -107,11 +135,13 @@ class DFFNet(nn.Module):
             feat3 = torch.cat((feat4_2x, vol1), dim=1)
             _, cost3 = self.decoder3(feat3)
         
-        cost3=self.sig(cost3)
         cost3=F.interpolate(cost3, [h, w], mode='bilinear')
         fdepth3,ddepth3,fddepth3,std3=-1,-1,-1,-1
         if(self.fuse==0 or self.fuse==2):
-            fdepth3,std3=self.disp_reg(F.softmax(cost3,1),focal_dist, uncertainty=True)
+            if(self.disp_mode==0):
+                fdepth3,std3=self.disp_reg(F.softmax(cost3,1),focal_dist, uncertainty=True)
+            elif(self.disp_mode==1):
+                fdepth3=self.disp_net()
         if(self.fuse==2):
             fddepth3=(fdepth3+ddepth3)*0.5
         #for defocus-based method, calculate depth from blur
