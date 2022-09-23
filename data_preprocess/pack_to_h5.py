@@ -5,7 +5,7 @@ import h5py
 import numpy as np
 from glob import glob
 import scipy.io
-from data_preprocess.depth2disp import dpth2disp
+from depth2disp import dpth2disp
 import sys
 
 
@@ -59,19 +59,21 @@ def pack_h5(stack_train_dir, disp_train_dir, train_lst, val_lst, out_dir, mat, s
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--img_folder", default='/data/DFF/DDFF-12_rawData/imgs_all/train',
+    parser.add_argument("--img_folder", default='/scratch/lnw8px/images_all/train',
                             help="input directory containing training focal stacks", type=str)
-    parser.add_argument("--disp_folder",default='/data/DFF/DDFF-12_rawData/DepthRegistered/train',
+    parser.add_argument("--disp_folder",default='/scratch/lnw8px/DepthRegistered/train',
                          help="input directory containing training disparities", type=str)
-    parser.add_argument("--calib_mat", default='third_part/IntParamLF.mat',
+    parser.add_argument("--calib_mat", default='/home/lnw8px/code/DFD/depth-from-Focus-Defocus/data_preprocess/third_part/IntParamLF.mat',
                         help="input file of camera calibration result", type=str)
-    parser.add_argument("--outfile", default='/data/DFF/my_ddff_trainVal.h5', help="h5 file to be written", type=str)
+    parser.add_argument("--outfile", default='/scratch/lnw8px/my_dff_trainVal.h5:', help="h5 file to be written", type=str)
     args = parser.parse_args()
 
     np.random.seed(1)
 
     # pick train and val
+    print(args.img_folder)
     scene_lst = os.listdir(args.img_folder)
+    print(scene_lst)
     val_idx = np.random.choice(len(scene_lst), 2, replace=False)
 
     # to get exactly same train/val split with ours, please replace the follow 2 lines with the hard-code list
@@ -87,4 +89,5 @@ if __name__ == "__main__":
 
     print(val_list, train_list)
     # pack h5
+    print(args.img_folder)
     pack_h5(args.img_folder, args.disp_folder, train_list,val_list, args.outfile, mat)

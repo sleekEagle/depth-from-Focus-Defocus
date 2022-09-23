@@ -80,9 +80,9 @@ class AENet(nn.Module):
         pool_temp = []
         for j in range(self.n_blocks + 1):
             down_temp = []
-            print("@@@@@")
+            #print("@@@@@")
             for i in range(k):
-                print('******')
+                #print('******')
                 if j > 0:
                     joint_pool = torch.cat([pool_temp[0], pool_max[0]], dim=1)
                     pool_temp.pop(0)
@@ -90,14 +90,14 @@ class AENet(nn.Module):
                     #print(x2[:, 1 * i:1 * (i + 1), :, :].shape)
                     joint_pool = torch.cat([x[:, 1 * i:1 * (i + 1), :, :],x2[:, 1 * i:1 * (i + 1), :, :]], dim=1)
                 
-                print(joint_pool.shape)
+                #print(joint_pool.shape)
                 conv = self.__getattr__('conv_down2_' + str(j + 0))(joint_pool)
                 down_temp.append(conv)
                 pool = self.__getattr__('pool2_' + str(j + 0))(conv)
-                print('pool : '+str(pool.shape))
+                #print('pool : '+str(pool.shape))
                 pool_temp.append(pool)
                 pool = torch.unsqueeze(pool, 2)
-                print('pool : '+str(pool.shape))
+                #print('pool : '+str(pool.shape))
                 if i == 0:
                     pool_all = pool
                 else:
@@ -106,23 +106,23 @@ class AENet(nn.Module):
             pool_max = torch.max(pool_all, dim=2)
             down2.append(down_temp)
 
-        print('len pool temp='+str(len(pool_temp)))
+        #print('len pool temp='+str(len(pool_temp)))
         bridge = []
         for i in range(k):
             join_pool = torch.cat([pool_temp[i], pool_max[0]], dim=1)
             bridge.append(self.bridge2(join_pool))
 
 
-        print('bridge shapes:')
-        for i in range(len(bridge)):
-            print(bridge[i].shape)
+        #print('bridge shapes:')
+        #for i in range(len(bridge)):
+        #    print(bridge[i].shape)
             
-        print('seconds step: ')
+        #print('seconds step: ')
         up_temp = []
         for j in range(self.n_blocks + 2):
-            print('pp@@@')
+            #print('pp@@@')
             for i in range(k):
-                print('****')
+                #print('****')
                 if j > 0:
                     joint_unpool = torch.cat([up_temp[0], unpool_max[0], F.interpolate(down1[j-1][:,i,:,:],[up_temp[0].shape[-1],up_temp[0].shape[-1]],mode='bilinear')], dim=1)
                     up_temp.pop(0)
@@ -132,7 +132,7 @@ class AENet(nn.Module):
 
                 if j < self.n_blocks + 1:
                     unpool = self.__getattr__('conv_up2_' + str(j + 1))(joint)
-                    print(unpool.shape)
+                    #print(unpool.shape)
                     up_temp.append(unpool)
                     unpool = torch.unsqueeze(unpool, 2)
 
@@ -149,11 +149,11 @@ class AENet(nn.Module):
       
         
         
-model=AENet(out_dim=1,nstacks=6,num_filter=16)
-model
-bs=2
-down1=[torch.rand((bs,6,128,7,7)),torch.rand((bs,6,64,14,14)),torch.rand((bs,6,32,28,28)),torch.rand((bs,6,16,56,56))]
-img=torch.rand((bs,6,224,224))
-fd=torch.rand(bs,6,224,224)
-out=model(img,down1,6,fd)
-out.shape
+#model=AENet(out_dim=1,nstacks=6,num_filter=16)
+#model
+#bs=2
+#down1=[torch.rand((bs,6,128,7,7)),torch.rand((bs,6,64,14,14)),torch.rand((bs,6,32,28,28)),torch.rand((bs,6,16,56,56))]
+#img=torch.rand((bs,6,224,224))
+#fd=torch.rand(bs,6,224,224)
+#out=model(img,down1,6,fd)
+#out.shape

@@ -35,11 +35,8 @@ parser.add_argument('--level', type=int ,default=4, help='num of layers in netwo
 parser.add_argument('--use_diff', default=1, type=int, choices=[0,1], help='if use differential feat, 0: None,  1: diff cost volume')
 parser.add_argument('--use_blur', default=1, type=int, choices=[0,1], help='if use blur training, 0: No,  1: Use blur supervision')
 parser.add_argument('--fuse', default=0, type=int, choices=[0,1,2], help='how to fuse defocus cues and focus scores, 0: only focus (equivalent to DFV paper),  1: Only defocus based, 2: final depth=(defocus+focus)/2')
-
+parser.add_argument('--disp_mode', default=0, type=int, choices=[0,1], help='What kind of depth regression used for DFF')
 parser.add_argument('--lvl_w', nargs='+', default=[8./15, 4./15, 2./15, 1./15],  help='for std weight')
-parser.add_argument('--dchlist', nargs='+',type=int, default=[10,32,1],  help='number of channels for depthNet')
-parser.add_argument('--dkernel', default=1, type=int, choices=[1,2,3,4], help='kernel size of depthNet')
-parser.add_argument('--dpool', default=0, type=int, choices=[0,1], help='0: no maxpool is used in depthNet 1: max pool between every conv layer')
 
 
 parser.add_argument('--lr', type=float, default=0.0001,  help='learning rate')
@@ -64,7 +61,7 @@ start_epoch = 1
 best_loss = 1e5
 total_iter = 0
 
-model = DFFNet(clean=False,level=args.level, use_diff=args.use_diff,dchlist=args.dchlist,dkernel=args.dkernel,dpool=args.dpool,fuse=args.fuse,dsigmoid=False)
+model = DFFNet(clean=False,level=args.level, use_diff=args.use_diff,fuse=args.fuse,disp_mode=args.disp_mode)
 model = nn.DataParallel(model)
 model.cuda()
 
@@ -131,7 +128,7 @@ def train(img_stack_in, blur_stack,gt_disp, foc_dist):
     img_stack_in=Variable(torch.FloatTensor(img_stack_in))
     gt_disp=Variable(torch.FloatTensor(gt_disp))
     img_stack,gt_disp,foc_dist,blur_stack=img_stack_in.cuda(),gt_disp.cuda(),foc_dist.cuda(),blur_stack.cuda()
-    focus=1./(blur_stack+1)
+    
     #---------
     max_val = torch.where(foc_dist>=100, torch.zeros_like(foc_dist), foc_dist) # exclude padding value
     min_val = torch.where(foc_dist<=0, torch.ones_like(foc_dist)*10, foc_dist)  # exclude padding value
@@ -145,7 +142,8 @@ def train(img_stack_in, blur_stack,gt_disp, foc_dist):
 
     optimizer.zero_grad()
     beta_scale = 1 # smooth l1 do not have beta in 1.6, so we increase the input to and then scale back -- no significant improve according to our trials
-    fstacked,dstacked,fdstacked,stds,cost= model(img_stack, foc_dist)
+    fstacked,ddepth,fdstacked,stds,cost= model(img_stack, foc_dist)
+   #print('ddepth shape '+str(ddepth.shape))
    # print(torch.mean(dstacked[0]))
    # print(torch.mean(gt_disp))
    # print("________")
@@ -156,12 +154,12 @@ def train(img_stack_in, blur_stack,gt_disp, foc_dist):
             _cur_floss = F.smooth_l1_loss(fstacked[i][mask] * beta_scale, gt_disp[mask]* beta_scale, reduction='none') / beta_scale
             floss = floss + lvl_w[i] * _cur_floss.mean()
         if(args.use_blur):
-            _cur_bloss=F.mse_loss(cost[i][mask_tiled],focus[mask_tiled],reduction='none').mean()
+            _cur_bloss=F.mse_loss(cost[i][mask_tiled],blur[mask_tiled],reduction='none').mean()
             bloss = bloss + lvl_w[i] * _cur_bloss.mean()
-        if(args.fuse==1):
-            _cur_dloss = F.smooth_l1_loss(dstacked[i][mask] * beta_scale, gt_disp[mask]* beta_scale, reduction='none').mean()/beta_scale
-            #print(_cur_dloss.mean())
-            dloss = dloss + lvl_w[i] * _cur_dloss.mean()
+    if(args.fuse==1 or args.fuse==2):
+        _cur_dloss = F.smooth_l1_loss(ddepth[mask] * beta_scale, gt_disp[mask]* beta_scale, reduction='none').mean()/beta_scale
+        #print(_cur_dloss.mean())
+        dloss = _cur_dloss.mean()
     
     if(args.fuse==0):
         loss=floss
@@ -214,7 +212,7 @@ def train(img_stack_in, blur_stack,gt_disp, foc_dist):
         dlossvalue=dloss.data
     if(type(fdloss)==torch.Tensor):
         fdlossvalue=fdloss.data
-    del fstacked,dstacked,fdstacked
+    del fstacked,ddepth,fdstacked,cost
     return flossvalue,blossvalue,dlossvalue,fdlossvalue,vis
 
 

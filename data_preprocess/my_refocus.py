@@ -109,8 +109,8 @@ def refocus(light_field, calib_mat, output_folder, stack_size=10):
         cv2.imwrite(output_folder + "/" + "{0:02d}".format(idx+1) + ".png", cv2.cvtColor(image, cv2.COLOR_RGB2BGR))
 
 if __name__ == "__main__":
-    data_pth = '/data/DFF/DDFF-12_rawData/LightField/train/' # raw lightfield data pth
-    out_pth = '/data/DFF/DDFF-12_rawData/imgs_all/train/' # raw image path
+    data_pth = '/scratch/lnw8px/LightField/train/' # raw lightfield data pth
+    out_pth = '/scratch/lnw8px/images_all/train/' # raw image path
     for fd in os.listdir(data_pth):
         if not os.path.isdir(out_pth + '/{}'.format(fd)):
             os.makedirs(out_pth + '/{}'.format(fd))
