@@ -13,10 +13,9 @@ import torch.nn.functional as  F
 # static architecture
 class AENet(nn.Module):
 
-    def __init__(self,in_dim,out_dim, num_filter,nstacks, n_blocks=3, flag_step2=False):
+    def __init__(self,out_dim, num_filter,nstacks, n_blocks=3, flag_step2=False):
         super(AENet, self).__init__()
         
-        self.in_dim = in_dim
         self.out_dim = out_dim
         self.num_filter = num_filter
         self.n_blocks = n_blocks
@@ -76,7 +75,7 @@ class AENet(nn.Module):
         return pool
 
 
-    def forward(self, x,down1,inp=3,k=8,x2=0):
+    def forward(self, x,down1,k=8,x2=0):
         down2 = []
         pool_temp = []
         for j in range(self.n_blocks + 1):
@@ -121,7 +120,7 @@ class AENet(nn.Module):
         print('seconds step: ')
         up_temp = []
         for j in range(self.n_blocks + 2):
-            print('@@@')
+            print('pp@@@')
             for i in range(k):
                 print('****')
                 if j > 0:
@@ -150,11 +149,11 @@ class AENet(nn.Module):
       
         
         
-model=AENet(in_dim=3,out_dim=1,nstacks=6,num_filter=16)
+model=AENet(out_dim=1,nstacks=6,num_filter=16)
 model
-
-down1=[torch.rand((10,6,128,2,2)),torch.rand((10,6,64,4,4)),torch.rand((10,6,32,8,8)),torch.rand((10,6,16,16,16))]
-img=torch.rand((10,6,64,64))
-fd=torch.rand(10,6,64,64)
-out=model(img,down1,3,6,fd)
+bs=2
+down1=[torch.rand((bs,6,128,7,7)),torch.rand((bs,6,64,14,14)),torch.rand((bs,6,32,28,28)),torch.rand((bs,6,16,56,56))]
+img=torch.rand((bs,6,224,224))
+fd=torch.rand(bs,6,224,224)
+out=model(img,down1,6,fd)
 out.shape
