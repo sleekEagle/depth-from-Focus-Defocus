@@ -154,7 +154,7 @@ def train(img_stack_in, blur_stack,gt_disp, foc_dist):
             _cur_floss = F.smooth_l1_loss(fstacked[i][mask] * beta_scale, gt_disp[mask]* beta_scale, reduction='none') / beta_scale
             floss = floss + lvl_w[i] * _cur_floss.mean()
         if(args.use_blur):
-            _cur_bloss=F.mse_loss(cost[i][mask_tiled],blur[mask_tiled],reduction='none').mean()
+            _cur_bloss=F.mse_loss(cost[i][mask_tiled],blur_stack[mask_tiled],reduction='none').mean()
             bloss = bloss + lvl_w[i] * _cur_bloss.mean()
     if(args.fuse==1 or args.fuse==2):
         _cur_dloss = F.smooth_l1_loss(ddepth[mask] * beta_scale, gt_disp[mask]* beta_scale, reduction='none').mean()/beta_scale
