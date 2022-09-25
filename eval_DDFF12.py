@@ -61,6 +61,8 @@ else:
 print('Number of model parameters: {}'.format(sum([p.data.nelement() for p in model.parameters()])))
 '''
 
+ranges=[0,0.1,0.2,0.3,0.4]
+
 def calmetrics( pred, target, mse_factor, accthrs, bumpinessclip=0.05, ignore_zero=True):
     metrics = np.zeros((1, 7 + len(accthrs)), dtype=float)
 
@@ -79,16 +81,21 @@ def calmetrics( pred, target, mse_factor, accthrs, bumpinessclip=0.05, ignore_ze
     metrics[0, 0] = er.sum() / numPixels * mse_factor
     #divide distance into bins and get the group wise error for each distance bin
     #round target to create groups 
-    target_list=(target.reshape(-1)*100).astype(int)
+    target_list=target.reshape(-1)
     #print('max_target ' +str(np.max(target)))
     #print('max target ' + str(np.max(target_list)))
     er_list=er.reshape(-1)
-    ones_list=np.ones_like(er_list)
-    bins=np.bincount(target_list, weights=er_list)
-    bins_conc=np.concatenate((bins,np.zeros(100-bins.shape[0],dtype=float)),axis=0) 
-    counts=np.bincount(target_list, weights=ones_list)
-    counts_conc=np.concatenate((counts,np.ones(100-counts.shape[0],dtype=float)),axis=0) 
-    mean_er_bins=np.nan_to_num(bins_conc/counts_conc)
+    er_means=[]
+    er_counts=[]
+    for i in range(len(ranges)-1):
+        indices=np.count_nonzero((target_list>=ranges[i])&(target_list<ranges[i+1]))
+        er_counts.append(indices)
+        if(indices>0):
+            er_means.append(er_list[(target_list>=ranges[i])&(target_list<ranges[i+1])].sum())
+        else:
+            er_means.append(0)
+    er_means=np.array(er_means)
+    er_counts=np.array(er_counts)
     #print(mean_er_bins.shape)
     #print(mean_er_bins)
     # RMS
@@ -132,7 +139,7 @@ def calmetrics( pred, target, mse_factor, accthrs, bumpinessclip=0.05, ignore_ze
     bumpiness = bumpiness[target > 0].sum() if ignore_zero else bumpiness.sum()
     metrics[0, 9] = bumpiness / chn / numPixels * 100.
 
-    return metrics,mean_er_bins
+    return metrics,er_means,er_counts
 
 
 def main(image_size = (383, 552)):
@@ -157,7 +164,8 @@ def main(image_size = (383, 552)):
     # metric prepare
     accthrs = [1.25, 1.25 ** 2, 1.25 ** 3]
     avgmetrics = np.zeros((1, 7 + len(accthrs) + 1), dtype=float)
-    avg_er_bins=np.zeros((100),dtype=float)
+    avg_er=np.zeros((len(ranges)-1),dtype=float)
+    n_er=np.zeros(len(ranges)-1,dtype=int)
     test_num = len(dataloader)
     time_rec = np.zeros(test_num)
     for inx,(img_stack,disp,_,foc_dist) in enumerate(dataloader):
@@ -243,8 +251,9 @@ def main(image_size = (383, 552)):
         #
         #     cv2.imwrite('{}/{}_err.png'.format(img_save_pth, inx), err*2550)
 
-        metrics,er_bins = calmetrics( pred_disp, gt_disp, 1.0, accthrs, bumpinessclip=0.05, ignore_zero=True)
-        avg_er_bins+=er_bins
+        metrics,er_sums,er_counts = calmetrics( pred_disp, gt_disp, 1.0, accthrs, bumpinessclip=0.05, ignore_zero=True)
+        avg_er+=er_sums
+        n_er+=er_counts
         avgmetrics[:,:-1] += metrics
         if(not(args.fuse==1)):
             avgmetrics[:, -1] += std.mean().detach().cpu().numpy()
@@ -254,13 +263,13 @@ def main(image_size = (383, 552)):
 
     final_res = (avgmetrics /test_num)[0]
     final_res = np.delete(final_res, 8) # remove badpix result, we do not use it in our paper
-    final_bins=avg_er_bins/test_num
+    final_avg_er=avg_er/n_er
     print('==============  Final result =================')
     print("\n  " + ("{:>10} | " * 10).format("MSE", "RMS", "log RMS", "Abs_rel", "Sqr_rel", "a1", "a2", "a3", "bump", "avgUnc"))
     print(("  {: 2.6f}  " * 10).format(*final_res.tolist()) )
     print('runtime mean', np.mean(time_rec[1:])) # first one usually very large due to the pytorch warm up, discard
-    print('binned per-distance error: ' + str(avg_er_bins))
-
+    print('binned per-distance error: ' + str(final_avg_er))
+    #print('binned per-distance counts: ' + str(n_er))
 if __name__ == '__main__':
     main()
 
