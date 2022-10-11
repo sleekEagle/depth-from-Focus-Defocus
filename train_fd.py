@@ -33,16 +33,17 @@ parser.add_argument('--FoD_scale', default=0.2,
 parser.add_argument('--stack_num', type=int ,default=5, help='num of image in a stack, please take a number in [2, 10]')
 parser.add_argument('--level', type=int ,default=4, help='num of layers in network, please take a number in [1, 4]')
 parser.add_argument('--use_diff', default=1, type=int, choices=[0,1], help='if use differential feat, 0: None,  1: diff cost volume')
-parser.add_argument('--use_blur', default=1, type=int, choices=[0,1], help='if use blur training, 0: No,  1: Use blur supervision')
-parser.add_argument('--fuse', default=0, type=int, choices=[0,1,2], help='how to fuse defocus cues and focus scores, 0: only focus (equivalent to DFV paper),  1: Only defocus based, 2: final depth=(defocus+focus)/2')
-parser.add_argument('--disp_mode', default=0, type=int, choices=[0,1], help='What kind of depth regression used for DFF')
+parser.add_argument('--blur', default=0, type=int, choices=[0,1], help='if use blur training, 0: No,  1: Use blur supervision')
+parser.add_argument('--reg', default=0, type=int, choices=[0,1,2], help='how to fuse defocus cues and focus scores, 0: only focus (equivalent to DFV paper),  1: Only defocus based, 2: final depth=(defocus+focus)/2')
+parser.add_argument('--aenet', default=0, type=int, choices=[0,1], help='What kind of depth regression used for DFF')
+parser.add_argument('--cnn', default=0, type=int, choices=[0,1,2,3,4], help='number of CNN layers of the depth prediction CNN')
+parser.add_argument('--lmd', default=0, type=float, help='total_loss=other_loss+lmd*blur_loss')
 parser.add_argument('--lvl_w', nargs='+', default=[8./15, 4./15, 2./15, 1./15],  help='for std weight')
 
 
 parser.add_argument('--lr', type=float, default=0.0001,  help='learning rate')
 parser.add_argument('--epochs', type=int, default=700, help='number of epochs to train')
 parser.add_argument('--batchsize', type=int, default=20, help='samples per batch')
-parser.add_argument('--lmd', type=float, default=0.2,  help='blur loss weight')
 
 
 # ====== log path ==========
@@ -52,6 +53,8 @@ parser.add_argument('--seed', type=int, default=2021, metavar='S',  help='random
 
 args = parser.parse_args()
 args.logname = '_'.join(args.dataset)
+#check preliminary args
+    
 
 # ============ init ===============
 torch.manual_seed(args.seed)
@@ -61,7 +64,7 @@ start_epoch = 1
 best_loss = 1e5
 total_iter = 0
 
-model = DFFNet(clean=False,level=args.level, use_diff=args.use_diff,fuse=args.fuse,disp_mode=args.disp_mode)
+model = DFFNet(clean=False,level=args.level, use_diff=args.use_diff,cnnlayers=args.cnn)
 model = nn.DataParallel(model)
 model.cuda()
 
@@ -142,35 +145,36 @@ def train(img_stack_in, blur_stack,gt_disp, foc_dist):
 
     optimizer.zero_grad()
     beta_scale = 1 # smooth l1 do not have beta in 1.6, so we increase the input to and then scale back -- no significant improve according to our trials
-    fstacked,ddepth,fdstacked,stds,cost= model(img_stack, foc_dist)
+    regstacked,stds,cost= model(img_stack, foc_dist)
+    #focus=1./(blur_stack+1) 
    #print('ddepth shape '+str(ddepth.shape))
    # print(torch.mean(dstacked[0]))
    # print(torch.mean(gt_disp))
    # print("________")
-    floss,dloss,fdloss,bloss=0,0,0,0
+    regloss,aeloss,confloss,bloss=0,0,0,0
     lvl_w=[8./15, 4./15, 2./15, 1./15]
-    for i in range(len(fstacked)):
-        if(args.fuse==0 or args.fuse==2):
-            _cur_floss = F.smooth_l1_loss(fstacked[i][mask] * beta_scale, gt_disp[mask]* beta_scale, reduction='none') / beta_scale
-            floss = floss + lvl_w[i] * _cur_floss.mean()
-        if(args.use_blur):
+    for i in range(len(regstacked)):
+        if(args.reg==1):
+            _cur_floss = F.smooth_l1_loss(regstacked[i][mask] * beta_scale, gt_disp[mask]* beta_scale, reduction='none') / beta_scale
+            regloss = regloss + lvl_w[i] * _cur_floss.mean()
+        if(args.blur==1):
             _cur_bloss=F.mse_loss(cost[i][mask_tiled],blur_stack[mask_tiled],reduction='none').mean()
             bloss = bloss + lvl_w[i] * _cur_bloss.mean()
-    if(args.fuse==1 or args.fuse==2):
-        _cur_dloss = F.smooth_l1_loss(ddepth[mask] * beta_scale, gt_disp[mask]* beta_scale, reduction='none').mean()/beta_scale
+    #if(args.aenet==1):
+    #    _cur_dloss = F.smooth_l1_loss(aedepth[mask] * beta_scale, gt_disp[mask]* beta_scale, reduction='none').mean()/beta_scale
         #print(_cur_dloss.mean())
-        dloss = _cur_dloss.mean()
+    #    aeloss = _cur_dloss.mean()
     
-    if(args.fuse==0):
-        loss=floss
+    if(args.reg==1):
+        loss=regloss
         #print("floss="+str(loss.clone().detach().cpu().item()))
-    if(args.fuse==1):
-        loss=dloss
+    #if(args.aenet==1):
+    #    loss=aeloss
         #print("dloss="+str((dloss*1e-1).clone().detach().cpu().item()))
-    if(args.fuse==2):
-        loss=fdloss
-    if(args.use_blur):
-        loss=loss+bloss
+    #if(args.conf==1):
+    #    loss=regloss+aeloss
+    if(args.blur):
+        loss=loss+args.lmd*bloss
         #print("bloss="+str((bloss*1e-2).clone().detach().cpu().item()))
     #print("dloss="+str(dloss.detach().cpu().item())+" bloss="+str(bloss.detach().cpu().item()))
     #print("loss="+str(loss.clone().detach().cpu().item()))
@@ -195,25 +199,21 @@ def train(img_stack_in, blur_stack,gt_disp, foc_dist):
     #    print("mean weight "+str(torch.mean(g)))
     optimizer.step()
     vis={}
-    if(args.fuse==0):
-        vis['pred']=fstacked[0].detach().cpu()
-    if(args.fuse==1):
-        vis['pred']=dstacked[0].detach().cpu()
-    if(args.fuse==2):
-        vis['pred']=fdstacked[0].detach().cpu()
+    if(args.reg):
+        vis['pred']=regstacked[0].detach().cpu()
     vis['mask']=mask.type(torch.float).detach().cpu()
 
-    flossvalue,blossvalue,dlossvalue,fdlossvalue=0,0,0,0
-    if(type(floss)==torch.Tensor):
-        flossvalue=floss.data
+    reglossvalue,blossvalue,aelossvalue,conflossvalue=0,0,0,0
+    if(type(regloss)==torch.Tensor):
+        reglossvalue=regloss.data
     if(type(bloss)==torch.Tensor):
         blossvalue=bloss.data
-    if(type(dloss)==torch.Tensor):
-        dlossvalue=dloss.data
-    if(type(fdloss)==torch.Tensor):
-        fdlossvalue=fdloss.data
-    del fstacked,ddepth,fdstacked,cost
-    return flossvalue,blossvalue,dlossvalue,fdlossvalue,vis
+    if(type(aeloss)==torch.Tensor):
+        aelossvalue=aeloss.data
+    if(type(confloss)==torch.Tensor):
+        conflossvalue=confloss.data
+    del regstacked,cost
+    return reglossvalue,blossvalue,aelossvalue,conflossvalue,vis
 
 
 def valid(img_stack_in, blur_stack,disp, foc_dist):
@@ -227,23 +227,24 @@ def valid(img_stack_in, blur_stack,disp, foc_dist):
     mask.detach_()
     #----
     with torch.no_grad():
-        fstacked,dstacked,fdstacked,stds,cost_stacked= model(img_stack, foc_dist)
-        if(args.fuse==0):
-            loss=(F.mse_loss(fstacked[mask] , gt_disp[mask] , reduction='mean')) # use MSE loss for val
-        if(args.fuse==1):
-            loss=(F.mse_loss(dstacked[mask] , gt_disp[mask] , reduction='mean'))
-        if(args.fuse==2):
-            loss=(F.mse_loss(fdstacked[mask] , gt_disp[mask] , reduction='mean'))
+        regdepth,stds,cost= model(img_stack, foc_dist)
+        #print('eval ' +str(regdepth.shape)+' ' +str(aedepth.shape))
+        if(args.reg):
+            loss=(F.mse_loss(regdepth[mask] , gt_disp[mask] , reduction='mean')) # use MSE loss for val
+        #if(args.aenet):
+        #    loss=(F.mse_loss(aedepth[mask] , gt_disp[mask] , reduction='mean'))
+        #if(args.conf):
+        #    loss=(F.mse_loss(confdepth[mask] , gt_disp[mask] , reduction='mean'))
             
 
     vis = {}
     vis['mask'] = mask.type(torch.float).detach().cpu()
-    if(args.fuse==0):
-        vis["pred"]=fstacked.detach().cpu()
-    if(args.fuse==1):
-        vis["pred"]=dstacked.detach().cpu()
-    if(args.fuse==2):
-        vis["pred"]=fdstacked.detach().cpu()
+    if(args.reg):
+        vis["pred"]=regdepth.detach().cpu()
+   # if(args.aenet):
+   #     vis["pred"]=aedepth.detach().cpu()
+   # if(args.conf):
+   #     vis["pred"]=confdepth.detach().cpu()
     
     return loss, vis
 

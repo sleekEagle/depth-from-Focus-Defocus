@@ -30,9 +30,12 @@ parser.add_argument('--min_disp', type=float ,default=0.02, help='minium dispari
 
 parser.add_argument('--stack_num', type=int ,default=5, help='num of image in a stack, please take a number in [2, 10], change it according to the loaded checkpoint!')
 parser.add_argument('--use_diff',type=int, default=0, choices=[0,1], help='if use differential images as input, change it according to the loaded checkpoint!')
+parser.add_argument('--blur', default=0, type=int, choices=[0,1], help='if use blur training, 0: No,  1: Use blur supervision')
+parser.add_argument('--reg', default=0, type=int, choices=[0,1,2], help='how to fuse defocus cues and focus scores, 0: only focus (equivalent to DFV paper),  1: Only defocus based, 2: final depth=(defocus+focus)/2')
+parser.add_argument('--aenet', default=0, type=int, choices=[0,1], help='What kind of depth regression used for DFF')
+parser.add_argument('--conf', default=0, type=int, choices=[0,1], help='What kind of depth regression used for DFF')
 
 parser.add_argument('--level', type=int, default=4, help='num of layers in network, please take a number in [1, 4]')
-parser.add_argument('--fuse', default=0, type=int, choices=[0,1,2], help='how to fuse defocus cues and focus scores, 0: only focus (equivalent to DFV paper),  1: Only defocus based, 2: final depth=(defocus+focus)/2')
 args = parser.parse_args()
 
 # !!! Only for users who download our pre-trained checkpoint, comment the next four line if you are not !!!
@@ -47,11 +50,11 @@ else:
 from dataloader import DDFF12Loader
 
 # construct modeli
-model = DFFNet(clean=False,level=args.level,use_diff=args.use_diff,fuse=args.fuse)
+model = DFFNet(clean=False,level=args.level,use_diff=args.use_diff)
 model = nn.DataParallel(model)
 model.cuda()
-#ckpt_name = os.path.basename(os.path.dirname(args.loadmodel))
-'''
+ckpt_name = os.path.basename(os.path.dirname(args.loadmodel))
+
 if args.loadmodel is not None:
     pretrained_dict = torch.load(args.loadmodel)
     pretrained_dict['state_dict'] =  {k:v for k,v in pretrained_dict['state_dict'].items() if 'disp' not in k}
@@ -59,7 +62,6 @@ if args.loadmodel is not None:
 else:
     print('run with random init')
 print('Number of model parameters: {}'.format(sum([p.data.nelement() for p in model.parameters()])))
-'''
 
 ranges=[0,0.1,0.2,0.3,0.4]
 
@@ -180,10 +182,12 @@ def main(image_size = (383, 552)):
         with torch.no_grad():
             torch.cuda.synchronize()
             start_time = time.time()
-            pred_fdepth,pred_ddepth,pred_fddepth,std,focusMap=model(img_stack, foc_dist)
+            pred_fdepth,stds,pred_aedepth,pred_confdepth,focusMap=model(img_stack, foc_dist)
             pred_disp=0
-            if(args.fuse==0): pred_disp=pred_fdepth
-            if(args.fuse==1): pred_disp=pred_ddepth
+            if(args.conf):
+                pred_disp=pred_confdepth
+            elif(args.reg):pred_disp=pred_fdepth
+            elif(args.aenet):pred_disp=pred_aedepth
             torch.cuda.synchronize()
             ttime = (time.time() - start_time); #print('time = %.2f' % (ttime*1000) )
             time_rec[inx] = ttime
@@ -255,19 +259,20 @@ def main(image_size = (383, 552)):
         avg_er+=er_sums
         n_er+=er_counts
         avgmetrics[:,:-1] += metrics
-        if(not(args.fuse==1)):
-            avgmetrics[:, -1] += std.mean().detach().cpu().numpy()
-        else:	
-            avgmetrics[:, -1] += std
+        avgmetrics[:, -1] += stds.mean().detach().cpu().numpy()
         torch.cuda.empty_cache()
 
     final_res = (avgmetrics /test_num)[0]
     final_res = np.delete(final_res, 8) # remove badpix result, we do not use it in our paper
+    print(avg_er)
+    print(n_er)
     final_avg_er=avg_er/n_er
     print('==============  Final result =================')
     print("\n  " + ("{:>10} | " * 10).format("MSE", "RMS", "log RMS", "Abs_rel", "Sqr_rel", "a1", "a2", "a3", "bump", "avgUnc"))
     print(("  {: 2.6f}  " * 10).format(*final_res.tolist()) )
     print('runtime mean', np.mean(time_rec[1:])) # first one usually very large due to the pytorch warm up, discard
+    print('ranges : ' +str(ranges))
+    print('ranges : '+str(ranges))
     print('binned per-distance error: ' + str(final_avg_er))
     #print('binned per-distance counts: ' + str(n_er))
 if __name__ == '__main__':

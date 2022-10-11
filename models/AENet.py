@@ -124,7 +124,7 @@ class AENet(nn.Module):
             for i in range(k):
                 #print('****')
                 if j > 0:
-                    joint_unpool = torch.cat([up_temp[0], unpool_max[0], F.interpolate(down1[j-1][:,i,:,:],[up_temp[0].shape[-1],up_temp[0].shape[-1]],mode='bilinear')], dim=1)
+                    joint_unpool = torch.cat([up_temp[0], unpool_max[0], F.interpolate(down1[j-1][:,i,:,:],[up_temp[0].shape[-2],up_temp[0].shape[-1]],mode='bilinear')], dim=1)
                     up_temp.pop(0)
                     joint = self.__getattr__('conv_joint2_' + str(j + 0))(joint_unpool)
                 else:

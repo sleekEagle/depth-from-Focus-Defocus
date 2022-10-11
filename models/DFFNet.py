@@ -2,6 +2,7 @@ from __future__ import print_function
 import torch
 import torch.nn as nn
 import torch.utils.data
+import torch.nn.functional as F
 from models.submodule import *
 import pdb
 from models.featExactor2 import FeatExactor
@@ -10,23 +11,43 @@ from models.AENet import AENet
 
 # Ours-FV (use_diff=0) and Ours-DFV (use_diff=1) model
 
-class disparityNetCNN(nn.Module):
+class ConfNet(nn.Module):
     def __init__(self,n_fs):
-        super(disparityNetCNN, self).__init__()
-        self.n_fs=n_fs
-        self.lin1=nn.Linear(n_fs*2,1)
-        self.conv1=nn.Conv2d(2*n_fs, 1, kernel_size=1, stride=1, padding=0)
+        super(ConfNet, self).__init__()
+        self.conv1=nn.Conv2d(n_fs, 1, kernel_size=1, stride=1, padding=0)
+        self.sig=nn.Sigmoid()
 
     def forward(self, x, focal_dist=None):
-        #print('x shape ' +str(x.shape))
-        #print('foca shape '+str(focal_dist.shape))
-        input=torch.cat([x,focal_dist],dim=1)
-        out=self.conv1(input)
+        #print('confnet in : '+str(x.shape))
+        #input=torch.cat([x,focal_dist],dim=1)
+        out=self.conv1(x)
+        out=self.sig(out)
         return out
         
-#dmodel=disparityNetLin(5)
-#dmodel(x,focal_dist)
-       
+class depthNet(nn.Module):
+    def __init__(self,n_fs,cnnlayers):
+        super(depthNet, self).__init__()
+        #self.conv1=nn.Conv2d(n_fs*2, 1, kernel_size=1, stride=1, padding=0)
+        #self.sig=nn.Sigmoid()
+        self.layers = nn.ModuleList()
+        if(cnnlayers==1):
+            self.layers.append(nn.Conv2d(n_fs*2, 1, kernel_size=1, stride=1, padding=0))
+        else:
+            self.layers.append(nn.Conv2d(n_fs*2, 32, kernel_size=1, stride=1, padding=0))
+            for i in range(cnnlayers-1):
+                #print("cnnlayers "+str(cnnlayers)+" i "+str(i))
+                if(i==(cnnlayers-2)):
+                    self.layers.append(nn.Conv2d(32, 1, kernel_size=1, stride=1, padding=0))
+                    break
+                self.layers.append(nn.Conv2d(32, 32, kernel_size=1, stride=1, padding=0))
+
+    def forward(self, x, focal_dist=None):
+        #print('confnet in : '+str(x.shape))
+        #input=torch.cat([x,focal_dist],dim=1)
+        for layer in self.layers:
+            x=F.relu(layer(x))
+        return x
+ 
         
 
 class DFFNet(nn.Module):
@@ -34,15 +55,13 @@ class DFFNet(nn.Module):
         #0 - disparity regression from DFV paper
         #1 - our linear NN
         #2 - our CNN
-    def __init__(self,clean,level=1,use_diff=1,fuse=0,disp_mode=0):
+    def __init__(self,clean,level=1,use_diff=1,cnnlayers=1):
         super(DFFNet, self).__init__()
 
         self.clean = clean
         self.feature_extraction = FeatExactor()
         self.level = level
-        self.fuse=fuse
         self.sig=nn.Sigmoid()
-        self.disp_mode=disp_mode
 
         self.use_diff = use_diff
         assert level >= 1 and level <= 4
@@ -64,11 +83,12 @@ class DFFNet(nn.Module):
             self.decoder6 = decoderBlock(2, 128, 128, up=True, pool=True)
 
         # reg
-        self.disp_reg = disparityregression(1)        
+        #self.disp_reg = disparityregression(1)        
 	
-        self.dispNet=disparityNetCNN(5)
-        print(self.dispNet)
-        self.aenet=AENet(out_dim=1,nstacks=5,num_filter=16)
+        #self.ConfNet=ConfNet(5)
+        #self.aenet=AENet(out_dim=1,nstacks=5,num_filter=16)
+        self.depthnet=depthNet(5,cnnlayers)
+        print(self.depthnet)
 
     def diff_feat_volume1(self, vol):
         vol_out = vol[:,:, :-1] - vol[:, :, 1:]
@@ -94,7 +114,7 @@ class DFFNet(nn.Module):
                                  conv2.reshape(b, n, -1, h//8, w//8),\
                                  conv1.reshape(b, n, -1, h//4, w//4)
         #to be used as input to the AENet
-        down=[conv4ae,conv3ae,conv2ae,conv1ae]
+        #down=[conv4ae,conv3ae,conv2ae,conv1ae]
 
 
         #print('conv1ae: '+str(conv1ae.shape))
@@ -147,103 +167,81 @@ class DFFNet(nn.Module):
         #print('cost6: '+str(cost6.shape))
         
         cost3=F.interpolate(cost3, [h, w], mode='bilinear')
-        #print('cost3 '+str(cost3.shape))
-        #print('f ar '+str(focal_dist.shape))
-        if(self.disp_mode==1 or self.fuse==1 or self.fuse==2):
-            foc_ar=focal_dist.unsqueeze(dim=2).unsqueeze(dim=3).\
-            repeat_interleave(cost3.shape[2],dim=2).\
-            repeat_interleave(cost3.shape[3],dim=3)
-            #print('focal ar shape '+str(foc_ar.shape))
+        
+
+        #Use AENet to predict depth from defocus
+        #print('cost3 ' +str(cost3.shape))
+        #conf=self.ConfNet(cost3)
+        #print('conf out : ' +str(conf.shape))
+        #print('focal_dist : '+str(focal_dist.shape))
+        foc_ar=focal_dist.unsqueeze(dim=2).unsqueeze(dim=3).\
+        repeat_interleave(cost3.shape[2],dim=2).\
+        repeat_interleave(cost3.shape[3],dim=3)
+        #print('foc_ar: '+str(foc_ar.shape))
         fdepth3,ddepth,fddepth3,std3=-1,-1,-1,-1
-        if(self.fuse==0 or self.fuse==2):
-            if(self.disp_mode==0):
-                fdepth3,std3=self.disp_reg(F.softmax(cost3,1),focal_dist, uncertainty=True)
-                #print('fdepth3:'+str(fdepth3.shape))
-            elif(self.disp_mode==1):
-                fdepth3=self.dispNet(cost3,foc_ar)
-                #print('fdepth3_net:'+str(fdepth3.shape))
-            if(self.fuse==2):
-                fddepth3=(fdepth3+ddepth3)*0.5
-        #for defocus-based method, calculate depth from blur
-        if(self.fuse==1 or self.fuse==2):
-            blur3=cost3
-            #print('blur3 ' +str(blur3.shape))
-            #print('foc_ar '+str(foc_ar.shape))
-            #for item in down:
-            #    print(item.shape)
-            ddepth=self.aenet(blur3,down,5,foc_ar)
-            #print('depth net out ' +str(ddepth.shape))
-            ddepth=F.interpolate(ddepth,[h,w],mode='bilinear')
+        #fdepth3,std3=self.disp_reg(F.softmax(cost3,1),focal_dist, uncertainty=True)
+        
+        depthinp=torch.cat([cost3,foc_ar],dim=1)
+        fdepth3=self.depthnet(depthinp)
+        
         input_stack = stack.reshape(b*n, c, h , w)
         input_stack = stack.reshape(b*n, c, h , w)
         
         # different output based on level for training
         fstacked=[fdepth3]
-        fdstacked=[fddepth3]
+        #fdstacked=[fddepth3]
         stds=[std3]
         cost_stacked=[cost3]
-        
+
+        conv4_=conv4.reshape(b,n,conv4.shape[1],conv4.shape[2],conv4.shape[3])
+        conv3_=conv3.reshape(b,n,conv3.shape[1],conv3.shape[2],conv3.shape[3])
+        conv2_=conv2.reshape(b,n,conv2.shape[1],conv2.shape[2],conv2.shape[3])
+        conv1_=conv1.reshape(b,n,conv1.shape[1],conv1.shape[2],conv1.shape[3])
+        #print('inp to aenet : '+str(cost3.shape)+' ' +str(foc_ar.shape) + ' ' + str(conv4_.shape))
+        #print('depthinp : '+str(depthinp.shape))
+        #aedepth=self.aenet(cost3,[conv4_,conv3_,conv2_,conv1_],n,foc_ar)
+        #print('aedepth out '+str(aedepth.shape))
+        #confdepth=conf*fdepth3+(1-conf)*aedepth
         #if training the model
         if self.training :
             if self.level >= 2:
+                std4=-1
                 cost4=F.interpolate(cost4, [h, w], mode='bilinear')
                 cost_stacked.append(cost4)
-                if(self.fuse==0 or self.fuse==2):
-                    if(self.disp_mode==0):
-                        fdepth4,std4=self.disp_reg(F.softmax(cost4,1),focal_dist, uncertainty=True)
-                        stds.append(std4)
-                        #print('fdepth4:'+str(fdepth4.shape))
-                    elif(self.disp_mode==1):
-                        fdepth4=self.dispNet(cost4,foc_ar)
-                        #print('fdepth4_net:'+str(fdepth4.shape))
-                    fstacked.append(fdepth4)
-                if(self.fuse==2):
-                    pred4=(fdepth4+ddepth)*0.5
-                    fdstacked.append(pred4)
+                #fdepth4,std4=self.disp_reg(F.softmax(cost4,1),focal_dist, uncertainty=True)        
+                depthinp=torch.cat([cost4,foc_ar],dim=1)
+                fdepth4=self.depthnet(depthinp)
+                stds.append(std4)
+                fstacked.append(fdepth4)
                 
-                #total_depth=torch.cat((pred4,depth),dim=1)        
-                #pred4=total_depth*conf
-                
-                if self.level >=3 :
-                    cost5 = F.interpolate((cost5).unsqueeze(1), [focal_dist.shape[1], h, w], mode='trilinear').squeeze(1)
+                if self.level >=3 :    
+                    std5=-1
+                    cost5=F.interpolate(cost5, [h, w], mode='bilinear')
+                    #cost5 = F.interpolate((cost5).unsqueeze(1), [focal_dist.shape[1], h, w], mode='trilinear').squeeze(1)
                     cost_stacked.append(cost5)
-                    if(self.fuse==0 or self.fuse==2):
-                        if(self.disp_mode==0):
-                            fdepth5,std5=self.disp_reg(F.softmax(cost5,1),focal_dist, uncertainty=True)
-                            stds.append(std5)
-                            #print('fdepth5:'+str(fdepth5.shape))
-                        elif(self.disp_mode==1):
-                            fdepth5=self.dispNet(cost5,foc_ar)
-                            #print('fdepth5_net:'+str(fdepth5.shape))
-                        fstacked.append(fdepth5)
-                    if(self.fuse==2):
-                        pred5=(fdepth5+ddepth)*0.5
-                        fdstacked.append(pred5)
+                    #fdepth5,std5=self.disp_reg(F.softmax(cost5,1),focal_dist, uncertainty=True)
+                    depthinp=torch.cat([cost4,foc_ar],dim=1)
+                    fdepth5=self.depthnet(depthinp)
+                    stds.append(std5)
+                    fstacked.append(fdepth5)
 
                     if self.level >=4 :
-                        cost6 = F.interpolate((cost6).unsqueeze(1), [focal_dist.shape[1], h, w], mode='trilinear').squeeze(1)
+                        std6=-1
+                        #cost6 = F.interpolate((cost6).unsqueeze(1), [focal_dist.shape[1], h, w], mode='trilinear').squeeze(1)
+                        cost6=F.interpolate(cost6, [h, w], mode='bilinear')
                         cost_stacked.append(cost6)
-                        if(self.fuse==0 or self.fuse==2):
-                            if(self.disp_mode==0):
-                                fdepth6,std6=self.disp_reg(F.softmax(cost6,1),focal_dist, uncertainty=True)
-                                stds.append(std6)
-                                #print('fdepth6:'+str(fdepth6.shape))
-                            elif(self.disp_mode==1):
-                                fdepth6=self.dispNet(cost6,foc_ar)
-                                #print('fdepth6_net:'+str(fdepth6.shape))
-                            fstacked.append(fdepth6)
-                        if(self.fuse==2):
-                            pred6=(fdepth6+ddepth)*0.5
-                            fdstacked.append(pred6)
+                        depthinp=torch.cat([cost6,foc_ar],dim=1)
+                        fdepth6=self.depthnet(depthinp)
+                        #fdepth6,std6=self.disp_reg(F.softmax(cost6,1),focal_dist, uncertainty=True)
+                        stds.append(std6)
+                        fstacked.append(fdepth6)
                         
-            return fstacked,ddepth,fdstacked,stds,cost_stacked
+            return fstacked,stds,cost_stacked
         #if evaluating the model
         else:
-            if(self.fuse==0 or self.fuse==2):
-                std3=torch.squeeze(std3)
-            return fdepth3,ddepth,fddepth3,std3,cost3
+            return fdepth3,std3,cost3
 
-#model=DFFNet(clean=0,level=4,use_diff=0,fuse=1,disp_mode=0)
+#model=DFFNet(clean=0,le=4,use_diff=0,fese=1,disp_mode=0)
 #stack=torch.rand(4,5,3,224,224)
 #focal_dist=torch.rand(1,5)
-#out=model(stack,focal_dist)
+#out=model(stack,fostack=torch.rand(4,5,3,224,224)cal_dist)

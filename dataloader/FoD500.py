@@ -74,6 +74,7 @@ class ImageDataset(torch.utils.data.Dataset):
         return disp
 
     def __getitem__(self, idx):
+        #print('in get item 123')
         ##### Read and process an image
         idx_dpt = int(idx)
         img_dpt = read_dpt(self.root_dir + self.imglist_dpt[idx_dpt])
@@ -141,6 +142,8 @@ class ImageDataset(torch.utils.data.Dataset):
         if self.transform_fnc:
             sample = self.transform_fnc(sample)
         return sample['input'],sample['output'],sample['blur'],(torch.tensor(foc_dist))
+        #print('before return ')
+        #return torch.rand(2,3),torch.rand(3,4)
 
 class ToTensor(object):
     def __call__(self, sample):
