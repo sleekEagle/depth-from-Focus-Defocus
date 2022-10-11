@@ -44,10 +44,28 @@ else:
 print('Number of model parameters: {}'.format(sum([p.data.nelement() for p in model.parameters()])))
 model.eval()
 
+'''
+Load data using the FoD500 dataloader
+'''
+from dataloader import FoD500Loader
+database="C:\\Users\\lahir\\code\\trained_models\\testdata\\"
+FoD500_train, _ = FoD500Loader(database, n_stack=args.stack_num, scale=0.8)
+FoD500_train =[FoD500_train]
+
+
+dataset_train = torch.utils.data.ConcatDataset(FoD500_train)
+TrainImgLoader = torch.utils.data.DataLoader(dataset=dataset_train, num_workers=4, batch_size=1, shuffle=True, drop_last=True)
+
+for batch_idx, (img_stack, gt_disp, blur_stack,foc_dist) in enumerate(TrainImgLoader):
+    break
+
+
 img=torch.rand((1,5,3,224,224))
 focal_dist=torch.rand((1,5))
 
-fdepth3,std3,cost3=model(img,focal_dist)
+fdepth3,std3,cost3=model(img_stack,foc_dist)
+
+
 
 
 
