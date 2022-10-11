@@ -1,4 +1,5 @@
 import argparse
+import pwd
 import cv2
 from models import DFFNet
 import numpy as np
@@ -13,8 +14,6 @@ import matplotlib.pyplot as plt
 
 from torch.utils.data import DataLoader
 import torchvision
-
-
 
 parser = argparse.ArgumentParser(description='DFVDFF')
 parser.add_argument('--data_path', default='/data/DFF/my_ddff_trainVal.h5',help='test data path')
@@ -32,7 +31,7 @@ parser.add_argument('--fuse', default=0, type=int, choices=[0,1,2], help='how to
 args = parser.parse_args()
 
 
-model = DFFNet(clean=False,level=args.level,use_diff=args.use_diff,fuse=args.fuse)
+model = DFFNet(clean=False,level=args.level, use_diff=0,cnnlayers=1)
 model = nn.DataParallel(model)
 model.cuda()
 
@@ -43,11 +42,12 @@ if args.loadmodel is not None:
 else:
     print('run with random init')
 print('Number of model parameters: {}'.format(sum([p.data.nelement() for p in model.parameters()])))
+model.eval()
 
 img=torch.rand((1,5,3,224,224))
 focal_dist=torch.rand((1,5))
 
-model(img,focal_dist)
+fdepth3,std3,cost3=model(img,focal_dist)
 
 
 
