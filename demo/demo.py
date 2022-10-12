@@ -1,12 +1,19 @@
 import argparse
-import pwd
 import cv2
+import os
+import sys
+
+current = os.path.dirname(os.path.realpath(__file__))
+parent = os.path.dirname(current)
+sys.path.append(parent)
+
+import dataloader
 from models import DFFNet
 import numpy as np
-import os
 import skimage.filters as skf
 import time
 from models.submodule import *
+from PIL import Image
 
 import  matplotlib
 matplotlib.use('TkAgg')
@@ -45,25 +52,69 @@ print('Number of model parameters: {}'.format(sum([p.data.nelement() for p in mo
 model.eval()
 
 '''
+read data from directory
+'''
+phone_img_path=r"C:\Users\lahir\code\trained_models\savedimgs"
+out_path=r'C:\Users\lahir\code\trained_models\demoimages'
+imgs=os.listdir(phone_img_path)
+jpgs=[item for item in imgs if (item.split('.')[-1]=='jpg')]
+diopters=list(np.sort(np.unique(np.array([float(item.split('_')[-1][:-4]) for item in jpgs]))))
+diopters.reverse()
+selected_files=[]
+
+for i,d in enumerate(diopters):
+    for item in jpgs:
+        diop=float(item.split('_')[-1][:-4])
+        if(diop==d):
+            selected_files.append(item)
+            im = Image.open(phone_img_path+'\\'+item)
+            im.save(out_path+r'\000046_0'+str(i)+'All.tif', 'TIFF')
+            break
+
+
+'''
 Load data using the FoD500 dataloader
 '''
-from dataloader import FoD500Loader
-database="C:\\Users\\lahir\\code\\trained_models\\testdata\\"
-FoD500_train, _ = FoD500Loader(database, n_stack=args.stack_num, scale=0.8)
+import importlib
+import dataloader
+importlib.reload(dataloader)
+database=out_path+'\\'
+FoD500_train, _ = dataloader.FoD500Loader(database, n_stack=5, scale=1)
 FoD500_train =[FoD500_train]
 
 
+TrainImgLoader = torch.utils.data.DataLoader(dataset=FoD500_train, num_workers=1, batch_size=1, shuffle=True, drop_last=True)
 dataset_train = torch.utils.data.ConcatDataset(FoD500_train)
-TrainImgLoader = torch.utils.data.DataLoader(dataset=dataset_train, num_workers=4, batch_size=1, shuffle=True, drop_last=True)
 
-for batch_idx, (img_stack, gt_disp, blur_stack,foc_dist) in enumerate(TrainImgLoader):
+
+for batch_idx, (img_stack, gt_disp, blur_stack,foc_dist) in enumerate(dataset_train):
+    print('in here')
     break
+img_stack=torch.unsqueeze(img_stack,0)
+#foc_dist=torch.unsqueeze(foc_dist,0)
+#foc_dist=torch.tensor([[0.1,0.5,0.9,1.3,1.7]])
+diopters=list(1/np.array(diopters))
+foc_dist=torch.tensor([diopters])
+foc_dist=foc_dist.float()
 
-
-img=torch.rand((1,5,3,224,224))
-focal_dist=torch.rand((1,5))
 
 fdepth3,std3,cost3=model(img_stack,foc_dist)
+
+rgb=img_stack.detach().cpu()[0,0,0,:,:].numpy()
+plt.figure()
+plt.imshow(rgb, interpolation='nearest')
+plt.show()
+
+depthmap=fdepth3.detach().cpu()[0,0,:,:].numpy()
+depthmap*=1.7
+plt.figure()
+plt.imshow(depthmap, interpolation='nearest')
+plt.show()
+
+
+
+
+
 
 
 

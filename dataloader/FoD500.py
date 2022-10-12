@@ -211,8 +211,12 @@ class RandomFilp(object):
 
 def FoD500Loader(data_dir, n_stack=5, scale=1, focus_dist=[0.1,.15,.3,0.7,1.5]):
 
+    print('in fod loader...2')
+
     img_train_list = [f for f in listdir(data_dir) if isfile(join(data_dir, f)) and f[-7:] == "All.tif" and int(f[:6]) < 400]
     dpth_train_list = [f for f in listdir(data_dir) if isfile(join(data_dir, f)) and f[-7:] == "Dpt.exr" and int(f[:6]) < 400]
+    print(img_train_list)
+    print(dpth_train_list)
 
     img_train_list.sort()
     dpth_train_list.sort()
