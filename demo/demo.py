@@ -1,7 +1,7 @@
 import argparse
-import cv2
 import os
 import sys
+import matplotlib.image as mpimg
 
 current = os.path.dirname(os.path.realpath(__file__))
 parent = os.path.dirname(current)
@@ -11,7 +11,6 @@ import dataloader
 from models import DFFNet
 import numpy as np
 import skimage.filters as skf
-import time
 from models.submodule import *
 from PIL import Image
 
@@ -20,7 +19,6 @@ matplotlib.use('TkAgg')
 import matplotlib.pyplot as plt
 
 from torch.utils.data import DataLoader
-import torchvision
 
 parser = argparse.ArgumentParser(description='DFVDFF')
 parser.add_argument('--data_path', default='/data/DFF/my_ddff_trainVal.h5',help='test data path')
@@ -102,13 +100,17 @@ fdepth3,std3,cost3=model(img_stack,foc_dist)
 
 rgb=img_stack.detach().cpu()[0,0,0,:,:].numpy()
 plt.figure()
-plt.imshow(rgb, interpolation='nearest')
-plt.show()
+plt.imshow(rgb, cmap='gray',interpolation='nearest')
+plt.savefig("C:\\Users\\lahir\\code\\trained_models\\gray.png")
+plt.show() 
+
 
 depthmap=fdepth3.detach().cpu()[0,0,:,:].numpy()
 depthmap*=1.7
 plt.figure()
 plt.imshow(depthmap, interpolation='nearest')
+plt.colorbar()
+plt.savefig("C:\\Users\\lahir\\code\\trained_models\\depth.png")
 plt.show()
 
 
