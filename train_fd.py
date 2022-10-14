@@ -25,7 +25,7 @@ parser = argparse.ArgumentParser(description='DFVDFF')
 # === dataset =====
 parser.add_argument('--dataset', default=['FoD500','DDFF12'], nargs='+',  help='data Name')
 parser.add_argument('--DDFF12_pth', default=None, help='DDFF12 data path')
-parser.add_argument('--FoD_pth', default=None, help='FOD data path')
+parser.add_argument('--FoD_pth', default='C:\\Users\\lahir\\focusdata\\fs_6\\fs_6\\', help='FOD data path')
 parser.add_argument('--FoD_scale', default=0.2,
                     help='FoD dataset gt scale for loss balance, because FoD_GT: 0.1-1.5, DDFF12_GT 0.02-0.28, '
                          'empirically we find this scale help improve the model performance for our method and DDFF')
@@ -38,6 +38,7 @@ parser.add_argument('--reg', default=0, type=int, choices=[0,1,2], help='how to 
 parser.add_argument('--aenet', default=0, type=int, choices=[0,1], help='What kind of depth regression used for DFF')
 parser.add_argument('--cnn', default=0, type=int, choices=[0,1,2,3,4], help='number of CNN layers of the depth prediction CNN')
 parser.add_argument('--lmd', default=0, type=float, help='total_loss=other_loss+lmd*blur_loss')
+parser.add_argument('--mask', default=0, type=int, choices=[0,1], help='use the masked gt depth values to triin')
 parser.add_argument('--lvl_w', nargs='+', default=[8./15, 4./15, 2./15, 1./15],  help='for std weight')
 
 
@@ -135,7 +136,10 @@ def train(img_stack_in, blur_stack,gt_disp, foc_dist):
     #---------
     max_val = torch.where(foc_dist>=100, torch.zeros_like(foc_dist), foc_dist) # exclude padding value
     min_val = torch.where(foc_dist<=0, torch.ones_like(foc_dist)*10, foc_dist)  # exclude padding value
-    mask = (gt_disp >= min_val.min(dim=1)[0].view(-1,1,1,1)) & (gt_disp <= max_val.max(dim=1)[0].view(-1,1,1,1)) #
+    if(args.mask):
+        mask = (gt_disp >= min_val.min(dim=1)[0].view(-1,1,1,1)) & (gt_disp <= max_val.max(dim=1)[0].view(-1,1,1,1)) 
+    else:
+        mask=torch.ones_like(gt_disp)>0 # convert int array into boolean
     mask_tiled=torch.repeat_interleave(mask,repeats=5,dim=1)
     mask_blur=torch.repeat_interleave(mask,repeats=1,dim=1)
     mask.detach_()
