@@ -10,19 +10,6 @@ from models.AENet import AENet
 
 
 # Ours-FV (use_diff=0) and Ours-DFV (use_diff=1) model
-
-class ConfNet(nn.Module):
-    def __init__(self,n_fs):
-        super(ConfNet, self).__init__()
-        self.conv1=nn.Conv2d(n_fs, 1, kernel_size=1, stride=1, padding=0)
-        self.sig=nn.Sigmoid()
-
-    def forward(self, x, focal_dist=None):
-        #print('confnet in : '+str(x.shape))
-        #input=torch.cat([x,focal_dist],dim=1)
-        out=self.conv1(x)
-        out=self.sig(out)
-        return out
         
 class depthNet(nn.Module):
     def __init__(self,n_fs,cnnlayers):
@@ -51,10 +38,6 @@ class depthNet(nn.Module):
         
 
 class DFFNet(nn.Module):
-    #disp_mode : how to get distance from focal_score/blur
-        #0 - disparity regression from DFV paper
-        #1 - our linear NN
-        #2 - our CNN
     def __init__(self,clean,level=1,use_diff=1,cnnlayers=1):
         super(DFFNet, self).__init__()
 
@@ -84,11 +67,8 @@ class DFFNet(nn.Module):
 
         # reg
         #self.disp_reg = disparityregression(1)        
-	
-        #self.ConfNet=ConfNet(5)
-        #self.aenet=AENet(out_dim=1,nstacks=5,num_filter=16)
+
         self.depthnet=depthNet(5,cnnlayers)
-        print(self.depthnet)
 
     def diff_feat_volume1(self, vol):
         vol_out = vol[:,:, :-1] - vol[:, :, 1:]
@@ -99,10 +79,7 @@ class DFFNet(nn.Module):
         input_stack = stack.reshape(b*n, c, h , w)
 
         conv4, conv3, conv2, conv1  = self.feature_extraction(input_stack)
-        #print('conv1: '+str(conv1.shape))
-        #print('conv2: '+str(conv2.shape))
-        #print('conv3: '+str(conv3.shape))
-        #print('conv4: '+str(conv4.shape))
+
         # conv3d take b, c, d, h, w
         _vol4, _vol3, _vol2, _vol1  = conv4.reshape(b, n, -1, h//32, w//32).permute(0, 2, 1, 3, 4), \
                                  conv3.reshape(b, n, -1, h//16, w//16).permute(0, 2, 1, 3, 4),\
@@ -113,21 +90,6 @@ class DFFNet(nn.Module):
                                  conv3.reshape(b, n, -1, h//16, w//16),\
                                  conv2.reshape(b, n, -1, h//8, w//8),\
                                  conv1.reshape(b, n, -1, h//4, w//4)
-        #to be used as input to the AENet
-        #down=[conv4ae,conv3ae,conv2ae,conv1ae]
-
-
-        #print('conv1ae: '+str(conv1ae.shape))
-        #print('conv2ae: '+str(conv2ae.shape))
-        #print('conv3ae: '+str(conv3ae.shape))
-        #print('conv4ae: '+str(conv4ae.shape))           
-
-        #print('vol1: '+str(_vol1.shape))
-        #print('vol2: '+str(_vol2.shape))
-        #print('vol3: '+str(_vol3.shape))
-        #print('vol4: '+str(_vol4.shape))        
-        #d=_vol1.shape[0]*_vol1.shape[1]*_vol1.shape[2]
-        #n=_vol1.reshape(d,_vol1.shape[3],_vol1.shape[4])
         
         if self.use_diff == 1:
             vol4, vol3, vol2, vol1 = self.diff_feat_volume1(_vol4), self.diff_feat_volume1(_vol3),\
@@ -161,24 +123,14 @@ class DFFNet(nn.Module):
             feat3 = torch.cat((feat4_2x, vol1), dim=1)
             _, cost3 = self.decoder3(feat3)
         
-        #print('cost3: '+str(cost3.shape))
-        #print('cost4: '+str(cost4.shape))
-        #print('cost5: '+str(cost5.shape))
-        #print('cost6: '+str(cost6.shape))
         
         cost3=F.interpolate(cost3, [h, w], mode='bilinear')
-        
-
-        #Use AENet to predict depth from defocus
-        #print('cost3 ' +str(cost3.shape))
-        #conf=self.ConfNet(cost3)
-        #print('conf out : ' +str(conf.shape))
-        #print('focal_dist : '+str(focal_dist.shape))
+    
         foc_ar=focal_dist.unsqueeze(dim=2).unsqueeze(dim=3).\
         repeat_interleave(cost3.shape[2],dim=2).\
         repeat_interleave(cost3.shape[3],dim=3)
-        #print('foc_ar: '+str(foc_ar.shape))
         fdepth3,ddepth,fddepth3,std3=-1,-1,-1,-1
+
         #fdepth3,std3=self.disp_reg(F.softmax(cost3,1),focal_dist, uncertainty=True)
         
         depthinp=torch.cat([cost3,foc_ar],dim=1)
@@ -193,15 +145,6 @@ class DFFNet(nn.Module):
         stds=[std3]
         cost_stacked=[cost3]
 
-        conv4_=conv4.reshape(b,n,conv4.shape[1],conv4.shape[2],conv4.shape[3])
-        conv3_=conv3.reshape(b,n,conv3.shape[1],conv3.shape[2],conv3.shape[3])
-        conv2_=conv2.reshape(b,n,conv2.shape[1],conv2.shape[2],conv2.shape[3])
-        conv1_=conv1.reshape(b,n,conv1.shape[1],conv1.shape[2],conv1.shape[3])
-        #print('inp to aenet : '+str(cost3.shape)+' ' +str(foc_ar.shape) + ' ' + str(conv4_.shape))
-        #print('depthinp : '+str(depthinp.shape))
-        #aedepth=self.aenet(cost3,[conv4_,conv3_,conv2_,conv1_],n,foc_ar)
-        #print('aedepth out '+str(aedepth.shape))
-        #confdepth=conf*fdepth3+(1-conf)*aedepth
         #if training the model
         if self.training :
             if self.level >= 2:
@@ -241,7 +184,12 @@ class DFFNet(nn.Module):
         else:
             return fdepth3,std3,cost3
 
-#model=DFFNet(clean=0,le=4,use_diff=0,fese=1,disp_mode=0)
+'''
+model=DFFNet(clean=False,level=4)
+img_stack=torch.rand((5,5,3,224,224))
+foc_stack=torch.rand((5,5))
+regstacked,stds,cost=model(img_stack,foc_stack)
+'''
 #stack=torch.rand(4,5,3,224,224)
 #focal_dist=torch.rand(1,5)
 #out=model(stack,fostack=torch.rand(4,5,3,224,224)cal_dist)

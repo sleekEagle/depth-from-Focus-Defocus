@@ -1,7 +1,6 @@
 from __future__ import print_function
 import argparse
 import os
-import random
 import torch
 import torch.nn as nn
 import torch.backends.cudnn as cudnn
@@ -14,7 +13,6 @@ from models import DFFNet
 from utils import logger, write_log
 torch.backends.cudnn.benchmark=True
 from glob import glob
-import math
 
 '''
 Main code for Ours-FV and Ours-DFV training 
@@ -34,9 +32,8 @@ parser.add_argument('--stack_num', type=int ,default=5, help='num of image in a 
 parser.add_argument('--level', type=int ,default=4, help='num of layers in network, please take a number in [1, 4]')
 parser.add_argument('--use_diff', default=1, type=int, choices=[0,1], help='if use differential feat, 0: None,  1: diff cost volume')
 parser.add_argument('--blur', default=0, type=int, choices=[0,1], help='if use blur training, 0: No,  1: Use blur supervision')
-parser.add_argument('--reg', default=0, type=int, choices=[0,1,2], help='how to fuse defocus cues and focus scores, 0: only focus (equivalent to DFV paper),  1: Only defocus based, 2: final depth=(defocus+focus)/2')
 parser.add_argument('--aenet', default=0, type=int, choices=[0,1], help='What kind of depth regression used for DFF')
-parser.add_argument('--cnn', default=0, type=int, choices=[0,1,2,3,4], help='number of CNN layers of the depth prediction CNN')
+parser.add_argument('--cnn', default=1, type=int, choices=[1,2,3,4], help='number of CNN layers of the depth prediction CNN')
 parser.add_argument('--lmd', default=0, type=float, help='total_loss=other_loss+lmd*blur_loss')
 parser.add_argument('--mask', default=0, type=int, choices=[0,1], help='use the masked gt depth values to triin')
 parser.add_argument('--lvl_w', nargs='+', default=[8./15, 4./15, 2./15, 1./15],  help='for std weight')
@@ -126,7 +123,6 @@ print('%d batches per epoch'%(len(TrainImgLoader)))
 
 
 # =========== Train func. =========
-optimizer = optim.Adam(model.parameters(), lr=0.0001, betas=(0.9, 0.999))
 def train(img_stack_in, blur_stack,gt_disp, foc_dist):
     model.train()
     img_stack_in=Variable(torch.FloatTensor(img_stack_in))
@@ -150,74 +146,33 @@ def train(img_stack_in, blur_stack,gt_disp, foc_dist):
     optimizer.zero_grad()
     beta_scale = 1 # smooth l1 do not have beta in 1.6, so we increase the input to and then scale back -- no significant improve according to our trials
     regstacked,stds,cost= model(img_stack, foc_dist)
-    #focus=1./(blur_stack+1) 
-   #print('ddepth shape '+str(ddepth.shape))
-   # print(torch.mean(dstacked[0]))
-   # print(torch.mean(gt_disp))
-   # print("________")
-    regloss,aeloss,confloss,bloss=0,0,0,0
+    dloss,bloss=0,0
     lvl_w=[8./15, 4./15, 2./15, 1./15]
     for i in range(len(regstacked)):
-        if(args.reg==1):
-            _cur_floss = F.smooth_l1_loss(regstacked[i][mask] * beta_scale, gt_disp[mask]* beta_scale, reduction='none') / beta_scale
-            regloss = regloss + lvl_w[i] * _cur_floss.mean()
+        _cur_floss = F.smooth_l1_loss(regstacked[i][mask] * beta_scale, gt_disp[mask]* beta_scale, reduction='none') / beta_scale
+        dloss = dloss + lvl_w[i] * _cur_floss.mean()
         if(args.blur==1):
             _cur_bloss=F.mse_loss(cost[i][mask_tiled],blur_stack[mask_tiled],reduction='none').mean()
             bloss = bloss + lvl_w[i] * _cur_bloss.mean()
-    #if(args.aenet==1):
-    #    _cur_dloss = F.smooth_l1_loss(aedepth[mask] * beta_scale, gt_disp[mask]* beta_scale, reduction='none').mean()/beta_scale
-        #print(_cur_dloss.mean())
-    #    aeloss = _cur_dloss.mean()
-    
-    if(args.reg==1):
-        loss=regloss
-        #print("floss="+str(loss.clone().detach().cpu().item()))
-    #if(args.aenet==1):
-    #    loss=aeloss
-        #print("dloss="+str((dloss*1e-1).clone().detach().cpu().item()))
-    #if(args.conf==1):
-    #    loss=regloss+aeloss
-    if(args.blur):
-        loss=loss+args.lmd*bloss
-        #print("bloss="+str((bloss*1e-2).clone().detach().cpu().item()))
-    #print("dloss="+str(dloss.detach().cpu().item())+" bloss="+str(bloss.detach().cpu().item()))
-    #print("loss="+str(loss.clone().detach().cpu().item()))
-    #print('******')
-    #loss=torch.clamp(loss,min=0,max=0.1)
+    loss=dloss
+    if(args.blur==1):
+        loss+=args.lmd*bloss
     loss.backward()
-    #print('loss' +str(loss)) 
-    
-    #g=model.module.depthNet[0].weight.grad
-    #if(g is not None):
-    #    print('grad before clipping'+str(torch.max(g)))
-        
-    torch.nn.utils.clip_grad_norm_(model.module.parameters(), max_norm=0.5)
-    #torch.nn.utils.clip_grad_norm_(model.module.depthNet.convs[0].parameters(), max_norm=0.5)
-    #torch.nn.utils.clip_grad_norm_(model.module.depthNet.convs[2].parameters(), max_norm=0.5)
 
-    #g=model.module.depthNet[0].weight.grad
-    #if(g is not None):
-    #    print("grad " +str(torch.max(g)))
-    #g=model.module.depthNet[0].weight
-    #if(g is not None):
-    #    print("mean weight "+str(torch.mean(g)))
+    torch.nn.utils.clip_grad_norm_(model.module.parameters(), max_norm=0.5)
     optimizer.step()
     vis={}
-    if(args.reg):
-        vis['pred']=regstacked[0].detach().cpu()
+    vis['pred']=regstacked[0].detach().cpu()
     vis['mask']=mask.type(torch.float).detach().cpu()
 
-    reglossvalue,blossvalue,aelossvalue,conflossvalue=0,0,0,0
-    if(type(regloss)==torch.Tensor):
-        reglossvalue=regloss.data
+    dlossvalue,blossvalue=0,0,
+    if(type(dloss)==torch.Tensor):
+        dlossvalue=dloss.data
     if(type(bloss)==torch.Tensor):
         blossvalue=bloss.data
-    if(type(aeloss)==torch.Tensor):
-        aelossvalue=aeloss.data
-    if(type(confloss)==torch.Tensor):
-        conflossvalue=confloss.data
+
     del regstacked,cost
-    return reglossvalue,blossvalue,aelossvalue,conflossvalue,vis
+    return dlossvalue,blossvalue,vis
 
 
 def valid(img_stack_in, blur_stack,disp, foc_dist):
@@ -232,24 +187,12 @@ def valid(img_stack_in, blur_stack,disp, foc_dist):
     #----
     with torch.no_grad():
         regdepth,stds,cost= model(img_stack, foc_dist)
-        #print('eval ' +str(regdepth.shape)+' ' +str(aedepth.shape))
-        if(args.reg):
-            loss=(F.mse_loss(regdepth[mask] , gt_disp[mask] , reduction='mean')) # use MSE loss for val
-        #if(args.aenet):
-        #    loss=(F.mse_loss(aedepth[mask] , gt_disp[mask] , reduction='mean'))
-        #if(args.conf):
-        #    loss=(F.mse_loss(confdepth[mask] , gt_disp[mask] , reduction='mean'))
-            
+        loss=(F.mse_loss(regdepth[mask] , gt_disp[mask] , reduction='mean')) # use MSE loss for val
 
     vis = {}
     vis['mask'] = mask.type(torch.float).detach().cpu()
-    if(args.reg):
-        vis["pred"]=regdepth.detach().cpu()
-   # if(args.aenet):
-   #     vis["pred"]=aedepth.detach().cpu()
-   # if(args.conf):
-   #     vis["pred"]=confdepth.detach().cpu()
-    
+    vis["pred"]=regdepth.detach().cpu()
+
     return loss, vis
 
 
@@ -286,14 +229,14 @@ def main():
         ## training ##
         for batch_idx, (img_stack, gt_disp, blur_stack,foc_dist) in enumerate(TrainImgLoader):
             start_time = time.time()
-            floss,bloss,dloss,fdlossvalue,viz=train(img_stack,blur_stack,gt_disp,foc_dist)
+            dloss,bloss,viz=train(img_stack,blur_stack,gt_disp,foc_dist)
 
             if total_iters %10 == 0:
                 torch.cuda.synchronize()
                 print('epoch %d:  %d/ %d f_loss = %.6f , b_loss = %.6f , d_loss = %.6f , time = %.2f' % (epoch, batch_idx, len(TrainImgLoader), floss,bloss,dloss, time.time() - start_time))
-                train_log.scalar_summary('loss_batch',floss, total_iters)
+                train_log.scalar_summary('loss_batch',dloss, total_iters)
 
-            total_train_loss += floss
+            total_train_loss += dloss
             total_iters += 1
 
         # record the last batch
