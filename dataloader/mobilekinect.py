@@ -23,31 +23,27 @@ def read_dpt(img_dpt_path):
     im = cv2.imread(img_dpt_path,-1)
     return im
 
+foc_dist=[2.0, 0.89, 0.57, 3.29, 1.1, 0.66, 0.75, 1.4, 10.0, 0.49]
+foc_dist_needed=[1.9,0.58,0.66,1.32]
+
 class ImageDataset(torch.utils.data.Dataset):
     """Focal place dataset."""
     #max_dpt=2.8398,min_dpt=0.1000
-    def __init__(self, root_dir, img_list, dpth_list,  transform_fnc=None, flag_shuffle=False, img_num=5, data_ratio=0,
-                 flag_inputs=[True, False], flag_outputs=[False, True], focus_dist=[0.1,.15,.3,0.7,1.5], f_number=0.1, 
-                 scale=1,max_dpt=1.5):
-        self.root_dir = root_dir
+    def __init__(self,img_list, dpth_list,  transform_fnc=None, flag_shuffle=False, data_ratio=0,
+                 flag_inputs=[True, False], flag_outputs=[False, True], f_number=0.1,max_dpt=1.5):
+
         self.transform_fnc = transform_fnc
         self.flag_shuffle = flag_shuffle
 
         self.flag_rgb = flag_inputs[0]
         self.flag_coc = flag_inputs[1]
 
-        self.img_num = img_num
         self.data_ratio = data_ratio
 
         self.flag_out_coc = flag_outputs[0]
         self.flag_out_depth = flag_outputs[1]
-
-        self.focus_dist = [f/max_dpt for f in focus_dist]
-        
-        self.max_n_stack = 5
-        self.dpth_scale = scale
-        
-        self.camera=CameraLens.CameraLens(2.9*1e-3,f_number=1)
+                
+        self.camera=CameraLens(2.9*1e-3,f_number=1)
         self.max_dpt=max_dpt
 
 
@@ -71,86 +67,68 @@ class ImageDataset(torch.utils.data.Dataset):
 
     def __getitem__(self, idx):
         ##### Read and process an image
-        idx_dpt = int(idx)
-        img_dpt = read_dpt(self.root_dir + self.imglist_dpt[idx_dpt])
-        img_dpt=img_dpt/self.max_dpt
+        idx_dpt = int(idx)        
+        img_dpt = read_dpt(self.imglist_dpt[idx_dpt])
 
-        foc_dist = self.focus_dist.copy()
+        idxdir=self.imglist_dpt[idx].split('\\')[-2]
+        imgdirs=[f.split('\\')[-2] for f in self.imglist_all]
+        imgpaths=[self.imglist_all[i] for i,item in enumerate(imgdirs) if item==idxdir]
+        foc_dist=[float(f.split('\\')[-1].split('_')[-1][:-4]) for f in imgpaths]
+        print(foc_dist)
+        
+        #img_dpt=img_dpt/self.max_dpt
         mat_dpt = img_dpt.copy()[:, :, np.newaxis]
-
-        img_num = min(self.max_n_stack, self.img_num)
-        ind = idx * img_num
-
-        num_list = list(range(self.max_n_stack))
-
+        print(mat_dpt.shape)
+        
         # add RGB, CoC, Depth inputs
         mats_input = []
         blur_list=[]
         mats_output = np.zeros((256, 256, 0))
+        foc_selected=[]
 
         # load existing image
-        pad_lst = []
-        pad_focs = []
-        for i in range(self.max_n_stack):
-            if self.flag_rgb:
-                im = Image.open(self.root_dir + self.imglist_all[ind + num_list[i]])
-                img_all = np.array(im)
-                # img Norm
-                mat_all = img_all.copy() / 255.
-                mat_all = (mat_all - self.img_mean) / self.img_std
-                mats_input.append(mat_all)
-
-                # pad invalid img in the beginning or the end, keep diff consistent
-                if self.img_num > self.max_n_stack and len(pad_lst) == 0:
-                    for j in range(self.img_num-self.max_n_stack):
-                        pad_lst.append(cv2.GaussianBlur(mat_all, self.guassian_kernel, 0))
-                        pad_focs.append(0)
+        for i in range(len(imgpaths)):
+            fdist=float(imgpaths[i].split('\\')[-1].split('_')[-1][:-4])
+            im = Image.open(imgpaths[i])
+            img_all = np.array(im)
+            # img Norm
+            mat_all = img_all.copy() / 255.
+            mat_all = (mat_all - self.img_mean) / self.img_std
+            mats_input.append(mat_all)  
+            foc_selected.append(fdist)
+            
+            
             #calc CoC images
-            blur=self.camera.get_coc(self.focus_dist[i],img_dpt)
+            blur=self.camera.get_coc(fdist,img_dpt)
             blur = np.clip(blur, 0, 1.272e-4) / 1.272e-4
             blur_list.append(blur)
-
-        mats_input = pad_lst + mats_input
-        foc_dist = pad_focs + foc_dist
-
-
+    
         mats_input=np.stack(mats_input)
+        print(mats_input.shape)
+        print('foc selected : ',foc_selected)
+        
         blur_list=np.stack(blur_list)
-        
-        if img_num < self.max_n_stack:
-            if len( self.imglist_all) > 100: # train
-                rand_idx = np.random.choice(self.max_n_stack, img_num,
-                                            replace=False)  # this will shuffle order as well
-                rand_idx = np.sort(rand_idx)
-            else:
-                rand_idx = np.linspace(0, self.max_n_stack, img_num)
-
-            mats_input = mats_input[rand_idx]
-            foc_dist = [foc_dist[i] for i in rand_idx]
-            blur_list=blur_list[rand_idx]
-
-        if self.flag_out_depth:
-            mats_output = np.concatenate((mats_output,(mat_dpt)), axis=2) # first 5 is COC last is depth  self.dpth2disp
-        
-        sample = {'input': mats_input, 'output': mats_output,'blur':(blur_list)}
-
+        print('blue shape:',str(blur_list.shape))
+                
+        sample = {'input': mats_input, 'output': mat_dpt,'blur':blur_list}
+        print('before trans...')
         if self.transform_fnc:
             sample = self.transform_fnc(sample)
-        return sample['input'],sample['output'],sample['blur'],(torch.tensor(foc_dist))
-        #print('before return ')
-        #return torch.rand(2,3),torch.rand(3,4)
+        #devide depth by 1000 to get m
+        return sample['input'],sample['output']/1000,sample['blur'],foc_dist
+
 
 class ToTensor(object):
     def __call__(self, sample):
-        mats_input,mats_output,coc = sample['input'], sample['output'],sample['blur']
+        mats_input,mats_output,blur = sample['input'], sample['output'],sample['blur']
         mats_input=mats_input.transpose((0, 3, 1, 2))
-        coc=coc.transpose((0, 1, 2))
+        blur=blur.transpose((0, 1, 2))
         mats_output=mats_output.transpose((2, 0, 1))
+        mats_output=mats_output.astype(np.float32)
         # print(mats_input.shape, mats_output.shape)
         return {'input': torch.from_numpy(mats_input).float(),
                 'output': torch.from_numpy(mats_output).float(),
-               'blur':torch.from_numpy(coc).float()}
-
+               'blur':torch.from_numpy(blur).float()}
 
 class RandomCrop(object):
     """ Randomly crop images
@@ -163,7 +141,7 @@ class RandomCrop(object):
             self.size = size
 
     def __call__(self, sample):
-        inputs,target,coc = sample['input'], sample['output'],sample['blur']
+        inputs,target,blur = sample['input'], sample['output'],sample['blur']
         n, h, w, _ = inputs.shape
         th, tw = self.size
         if w < tw: tw=w
@@ -172,10 +150,11 @@ class RandomCrop(object):
         x1 = random.randint(0, w - tw)
         y1 = random.randint(0, h - th)
         inputs=inputs[:, y1: y1 + th,x1: x1 + tw]
-        coc=coc[:, y1: y1 + th,x1: x1 + tw]
+        blur=blur[:, y1: y1 + th,x1: x1 + tw]
+        target=target[y1: y1 + th,x1: x1 + tw]
         return {'input':inputs,
-                'output':target[y1: y1 + th,x1: x1 + tw],
-                'blur':coc}
+                'output':target,
+                'blur':blur}
 
 
 class RandomFilp(object):
@@ -186,26 +165,25 @@ class RandomFilp(object):
         self.ratio = ratio
 
     def __call__(self, sample):
-        inputs,target,coc = sample['input'], sample['output'],sample['blur']
+        inputs,target,blur = sample['input'], sample['output'],sample['blur']
 
         # hori filp
         if np.random.binomial(1, self.ratio):
             inputs=inputs[:,:, ::-1]
             target=target[:,::-1]
-            coc=coc[:,:, ::-1]
+            blur=blur[:,:, ::-1]
 
         # vert flip
         if np.random.binomial(1, self.ratio):
             inputs=inputs[:, ::-1]
             target=target[::-1]
-            coc=coc[:, ::-1]
-
-        return {'input': np.ascontiguousarray(inputs), 'output': np.ascontiguousarray(target),'blur': np.ascontiguousarray(coc)}
-
+            blur=blur[:, ::-1]
+        return {'input': np.ascontiguousarray(inputs), 'output': np.ascontiguousarray(target),'blur': np.ascontiguousarray(blur)}
 
 
-def FoD500Loader(data_dir, n_stack=5, scale=1, focus_dist=[0.1,.15,.3,0.7,1.5]):
-    data_dir=r'C:\Users\lahir\fstack_data\data_processed'
+data_dir=r'C:\Users\lahir\fstack_data\data_processed'
+
+def MobileKinectLoader(data_dir):
     dirs=listdir(data_dir)
     dirs.sort()
     train_dirs=dirs[:3]
@@ -217,7 +195,6 @@ def FoD500Loader(data_dir, n_stack=5, scale=1, focus_dist=[0.1,.15,.3,0.7,1.5]):
     img_train_list=[join(data_dir,d,f) for d in train_dirs for f in listdir(join(data_dir,d)) if isfile(join(data_dir,d,f)) and f.split('.')[0]!="depth"]
     img_val_list=[join(data_dir,d,f) for d in val_dirs for f in listdir(join(data_dir,d)) if isfile(join(data_dir,d,f)) and f.split('.')[0]!="depth"]
 
-
     img_train_list.sort()
     dpth_train_list.sort()
 
@@ -228,12 +205,17 @@ def FoD500Loader(data_dir, n_stack=5, scale=1, focus_dist=[0.1,.15,.3,0.7,1.5]):
                         RandomCrop(224),
                         RandomFilp(0.5),
                         ToTensor()])
-    dataset_train = ImageDataset(root_dir=data_dir, img_list=img_train_list, dpth_list=dpth_train_list,
-                                 transform_fnc=train_transform, img_num=n_stack,  focus_dist=focus_dist, scale=scale)
+ 
+    dataset_train = ImageDataset(img_list=img_train_list, dpth_list=dpth_train_list,
+                                 transform_fnc=train_transform)
+    it=iter(dataset_valid)
+    a,b,c,d=next(it)
 
     val_transform = transforms.Compose([ToTensor()])
-    dataset_valid = ImageDataset(root_dir=data_dir, img_list=img_val_list, dpth_list=dpth_val_list,
-                                 transform_fnc=val_transform, img_num=n_stack, focus_dist=focus_dist, scale=scale)
+    dataset_valid = ImageDataset(img_list=img_val_list, dpth_list=dpth_val_list,
+                                 transform_fnc=val_transform)
 
 
     return dataset_train, dataset_valid
+
+path=r'C:\Users\lahir\Documents\CPR Quality Data\CoolTerm Capture 2022-10-20 15-08-48.txt'
