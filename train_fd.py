@@ -64,7 +64,7 @@ start_epoch = 1
 best_loss = 1e5
 total_iter = 0
 
-model = DFFNet(clean=False,level=args.level, use_diff=args.use_diff,cnnlayers=args.cnn)
+model = DFFNet(clean=False,level=args.level, use_diff=args.use_diff)
 model = nn.DataParallel(model)
 model.cuda()
 
@@ -125,95 +125,42 @@ print('%d batches per epoch'%(len(TrainImgLoader)))
 
 
 # =========== Train func. =========
-optimizer = optim.Adam(model.parameters(), lr=0.0001, betas=(0.9, 0.999))
-def train(img_stack_in, blur_stack,gt_disp, foc_dist):
+def train(img_stack_in,gt_disp, foc_dist,dataset):
     model.train()
     img_stack_in=Variable(torch.FloatTensor(img_stack_in))
     gt_disp=Variable(torch.FloatTensor(gt_disp))
-    img_stack,gt_disp,foc_dist,blur_stack=img_stack_in.cuda(),gt_disp.cuda(),foc_dist.cuda(),blur_stack.cuda()
+    img_stack,gt_disp,foc_dist=img_stack_in.cuda(),gt_disp.cuda(),foc_dist.cuda()
     
     #---------
     max_val = torch.where(foc_dist>=100, torch.zeros_like(foc_dist), foc_dist) # exclude padding value
     min_val = torch.where(foc_dist<=0, torch.ones_like(foc_dist)*10, foc_dist)  # exclude padding value
-    mask = (gt_disp >= min_val.min(dim=1)[0].view(-1,1,1,1)) & (gt_disp <= max_val.max(dim=1)[0].view(-1,1,1,1)) #
-    mask_tiled=torch.repeat_interleave(mask,repeats=5,dim=1)
-    mask_blur=torch.repeat_interleave(mask,repeats=1,dim=1)
+    mask = (gt_disp >= min_val.min(dim=1)[0].view(-1,1,1,1)) & (gt_disp <= max_val.max(dim=1)[0].view(-1,1,1,1))
     mask.detach_()
-    mask_tiled.detach_()
-    mask_blur.detach_()
     #----
 
     optimizer.zero_grad()
     beta_scale = 1 # smooth l1 do not have beta in 1.6, so we increase the input to and then scale back -- no significant improve according to our trials
     regstacked,stds,cost= model(img_stack, foc_dist)
-    #focus=1./(blur_stack+1) 
-   #print('ddepth shape '+str(ddepth.shape))
-   # print(torch.mean(dstacked[0]))
-   # print(torch.mean(gt_disp))
-   # print("________")
-    regloss,aeloss,confloss,bloss=0,0,0,0
+
+    regloss=0
     lvl_w=[8./15, 4./15, 2./15, 1./15]
     for i in range(len(regstacked)):
         if(args.reg==1):
             _cur_floss = F.smooth_l1_loss(regstacked[i][mask] * beta_scale, gt_disp[mask]* beta_scale, reduction='none') / beta_scale
             regloss = regloss + lvl_w[i] * _cur_floss.mean()
-        if(args.blur==1):
-            _cur_bloss=F.mse_loss(cost[i][mask_tiled],blur_stack[mask_tiled],reduction='none').mean()
-            bloss = bloss + lvl_w[i] * _cur_bloss.mean()
-    #if(args.aenet==1):
-    #    _cur_dloss = F.smooth_l1_loss(aedepth[mask] * beta_scale, gt_disp[mask]* beta_scale, reduction='none').mean()/beta_scale
-        #print(_cur_dloss.mean())
-    #    aeloss = _cur_dloss.mean()
     
-    if(args.reg==1):
-        loss=regloss
-        #print("floss="+str(loss.clone().detach().cpu().item()))
-    #if(args.aenet==1):
-    #    loss=aeloss
-        #print("dloss="+str((dloss*1e-1).clone().detach().cpu().item()))
-    #if(args.conf==1):
-    #    loss=regloss+aeloss
-    if(args.blur):
-        loss=loss+args.lmd*bloss
-        #print("bloss="+str((bloss*1e-2).clone().detach().cpu().item()))
-    #print("dloss="+str(dloss.detach().cpu().item())+" bloss="+str(bloss.detach().cpu().item()))
-    #print("loss="+str(loss.clone().detach().cpu().item()))
-    #print('******')
-    #loss=torch.clamp(loss,min=0,max=0.1)
+    loss=regloss
     loss.backward()
-    #print('loss' +str(loss)) 
-    
-    #g=model.module.depthNet[0].weight.grad
-    #if(g is not None):
-    #    print('grad before clipping'+str(torch.max(g)))
         
     torch.nn.utils.clip_grad_norm_(model.module.parameters(), max_norm=0.5)
-    #torch.nn.utils.clip_grad_norm_(model.module.depthNet.convs[0].parameters(), max_norm=0.5)
-    #torch.nn.utils.clip_grad_norm_(model.module.depthNet.convs[2].parameters(), max_norm=0.5)
-
-    #g=model.module.depthNet[0].weight.grad
-    #if(g is not None):
-    #    print("grad " +str(torch.max(g)))
-    #g=model.module.depthNet[0].weight
-    #if(g is not None):
-    #    print("mean weight "+str(torch.mean(g)))
     optimizer.step()
     vis={}
     if(args.reg):
         vis['pred']=regstacked[0].detach().cpu()
     vis['mask']=mask.type(torch.float).detach().cpu()
 
-    reglossvalue,blossvalue,aelossvalue,conflossvalue=0,0,0,0
-    if(type(regloss)==torch.Tensor):
-        reglossvalue=regloss.data
-    if(type(bloss)==torch.Tensor):
-        blossvalue=bloss.data
-    if(type(aeloss)==torch.Tensor):
-        aelossvalue=aeloss.data
-    if(type(confloss)==torch.Tensor):
-        conflossvalue=confloss.data
     del regstacked,cost
-    return reglossvalue,blossvalue,aelossvalue,conflossvalue,vis
+    return loss.data,vis
 
 
 def valid(img_stack_in, blur_stack,disp, foc_dist):
@@ -280,9 +227,10 @@ def main():
         #train_log.scalar_summary('lr_epoch', lr_, epoch)
 
         ## training ##
-        for batch_idx, (img_stack, gt_disp, blur_stack,foc_dist) in enumerate(TrainImgLoader):
+        for batch_idx, (img_stack, gt_disp,foc_dist,dataset) in enumerate(TrainImgLoader):
+            break
             start_time = time.time()
-            floss,bloss,dloss,fdlossvalue,viz=train(img_stack,blur_stack,gt_disp,foc_dist)
+            floss,viz=train(img_stack,gt_disp,foc_dist,dataset)
 
             if total_iters %10 == 0:
                 torch.cuda.synchronize()

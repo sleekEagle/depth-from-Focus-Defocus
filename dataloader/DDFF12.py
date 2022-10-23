@@ -105,7 +105,7 @@ class DDFF12Loader(Dataset):
             blur_imgs=blur_imgs[:, :256, :256]
         
         
-        return out_imgs,out_disp,blur_imgs,disp_dist
+        return out_imgs,out_disp,disp_dist,1
     
     def __create_preprocessing(self, crop_size=None, cliprange=[0.0202, 0.2825], mean=[0.485, 0.456, 0.406],
                                std=[0.229, 0.224, 0.225], b_filp=True):

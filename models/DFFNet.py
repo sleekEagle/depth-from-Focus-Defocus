@@ -13,23 +13,23 @@ def gets2(tensor):
     std=torch.std(tensor,axis=1,keepdim=True).repeat_interleave(tensor.shape[1],1)
     mean=torch.mean(tensor,axis=1,keepdim=True).repeat_interleave(tensor.shape[1],1)
     far=torch.abs((tensor-mean)/std)
+    #detect outliers
     outlier=far<1.6
+    #remove outliers
     clean=torch.where(outlier,tensor,mean)
+    #calculate depth
     s2=1/torch.mean(clean,axis=1,keepdim=True)
     return s2
 
 class DFFNet(nn.Module):
-    #disp_mode : how to get distance from focal_score/blur
-        #0 - disparity regression from DFV paper
-        #1 - our linear NN
-        #2 - our CNN
-    def __init__(self,clean,level=1,use_diff=0):
+    def __init__(self,clean,level=1,use_diff=0,numdatasets=3):
         super(DFFNet, self).__init__()
 
         self.clean = clean
         self.feature_extraction = FeatExactor()
         self.level = level
         self.use_diff=use_diff
+        self.cameraconst = nn.Parameter(torch.ones(numdatasets), requires_grad=True)
 
         assert level >= 1 and level <= 4
 
@@ -52,7 +52,7 @@ class DFFNet(nn.Module):
         vol_out = vol[:,:, :-1] - vol[:, :, 1:]
         return torch.cat([vol_out, vol[:,:, -1:]], dim=2) # last elem is  vol[:,:, -1] - 0
 
-    def forward(self, stack, focal_dist):
+    def forward(self, stack, focal_dist,dataset):
         b, n, c, h, w = stack.shape
         input_stack = stack.reshape(b*n, c, h , w)
 
@@ -98,8 +98,7 @@ class DFFNet(nn.Module):
         
         
         cost3=F.interpolate(cost3, [h, w], mode='bilinear')
-
-                
+ 
         input_stack = stack.reshape(b*n, c, h , w)
         input_stack = stack.reshape(b*n, c, h , w)
         
@@ -108,7 +107,7 @@ class DFFNet(nn.Module):
         cost_stacked=[cost3]
         fstacked=[]
         print('cost3:'+str(cost3.shape))
-        fdepth3=gets2(cost3)
+        fdepth3=gets2(cost3*cameraconst[dataset])
         fstacked.append(fdepth3)
         print('fdepth:'+str(fdepth3.shape))
         #print('fdepth:'+str(fdepth.shape))
@@ -119,7 +118,7 @@ class DFFNet(nn.Module):
                 std4=-1
                 cost4=F.interpolate(cost4, [h, w], mode='bilinear')
                 cost_stacked.append(cost4)
-                fdepth4=gets2(cost4)
+                fdepth4=gets2(cost4*cameraconst[dataset])
                 fstacked.append(fdepth4)
                 #fdepth4,std4=self.disp_reg(F.softmax(cost4,1),focal_dist, uncertainty=True)        
                 
@@ -127,27 +126,28 @@ class DFFNet(nn.Module):
                     std5=-1
                     cost5=F.interpolate(cost5, [h, w], mode='bilinear')
                     cost_stacked.append(cost5)
-                    fdepth5=gets2(cost5)
+                    fdepth5=gets2(cost5*cameraconst[dataset])
                     fstacked.append(fdepth5)
                     #fdepth5,std5=self.disp_reg(F.softmax(cost5,1),focal_dist, uncertainty=True)
                     if self.level >=4 :
                         std6=-1
                         cost6=F.interpolate(cost6, [h, w], mode='bilinear')
                         cost_stacked.append(cost6)
-                        fdepth6=gets2(cost6)
+                        fdepth6=gets2(cost6*cameraconst[dataset])
                         fstacked.append(fdepth6)
                         #fdepth6,std6=self.disp_reg(F.softmax(cost6,1),focal_dist, uncertainty=True)
                         
-            return fstacked,cost_stacked
+            return fstacked,1,cost_stacked
         #if evaluating the model
         else:
-            return fdepth3,cost3
+            return fdepth3,1,cost3
 
 '''
 model=DFFNet(clean=0)
 stack=torch.rand(4,5,3,224,224)
 focal_dist=torch.rand(1,5)
-out=model(stack,focal_dist)
+out=model(stack,focal_dist,2)
 '''
+
 
 
