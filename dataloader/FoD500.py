@@ -46,7 +46,7 @@ class ImageDataset(torch.utils.data.Dataset):
         self.flag_out_coc = flag_outputs[0]
         self.flag_out_depth = flag_outputs[1]
 
-        self.focus_dist = [f/max_dpt for f in focus_dist]
+        self.focus_dist = [f for f in focus_dist]
         
         self.max_n_stack = 5
         self.dpth_scale = scale
@@ -78,7 +78,7 @@ class ImageDataset(torch.utils.data.Dataset):
         ##### Read and process an image
         idx_dpt = int(idx)
         img_dpt = read_dpt(self.root_dir + self.imglist_dpt[idx_dpt])
-        img_dpt=img_dpt/self.max_dpt
+        img_dpt=img_dpt
 
         foc_dist = self.focus_dist.copy()
         mat_dpt = img_dpt.copy()[:, :, np.newaxis]
@@ -90,7 +90,6 @@ class ImageDataset(torch.utils.data.Dataset):
 
         # add RGB, CoC, Depth inputs
         mats_input = []
-        blur_list=[]
         mats_output = np.zeros((256, 256, 0))
 
         # load existing image
@@ -110,17 +109,11 @@ class ImageDataset(torch.utils.data.Dataset):
                     for j in range(self.img_num-self.max_n_stack):
                         pad_lst.append(cv2.GaussianBlur(mat_all, self.guassian_kernel, 0))
                         pad_focs.append(0)
-            #calc CoC images
-            blur=self.camera.get_coc(self.focus_dist[i],img_dpt)
-            blur = np.clip(blur, 0, 1.272e-4) / 1.272e-4
-            blur_list.append(blur)
 
         mats_input = pad_lst + mats_input
         foc_dist = pad_focs + foc_dist
 
-
         mats_input=np.stack(mats_input)
-        blur_list=np.stack(blur_list)
         
         if img_num < self.max_n_stack:
             if len( self.imglist_all) > 100: # train
@@ -132,29 +125,24 @@ class ImageDataset(torch.utils.data.Dataset):
 
             mats_input = mats_input[rand_idx]
             foc_dist = [foc_dist[i] for i in rand_idx]
-            blur_list=blur_list[rand_idx]
 
         if self.flag_out_depth:
             mats_output = np.concatenate((mats_output,(mat_dpt)), axis=2) # first 5 is COC last is depth  self.dpth2disp
         
-        sample = {'input': mats_input, 'output': mats_output,'blur':(blur_list)}
+        sample = {'input': mats_input, 'output': mats_output}
 
         if self.transform_fnc:
             sample = self.transform_fnc(sample)
         return sample['input'],sample['output'],(torch.tensor(foc_dist)),0
-        #print('before return ')
-        #return torch.rand(2,3),torch.rand(3,4)
 
 class ToTensor(object):
     def __call__(self, sample):
-        mats_input,mats_output,coc = sample['input'], sample['output'],sample['blur']
+        mats_input,mats_output = sample['input'], sample['output']
         mats_input=mats_input.transpose((0, 3, 1, 2))
-        coc=coc.transpose((0, 1, 2))
         mats_output=mats_output.transpose((2, 0, 1))
         # print(mats_input.shape, mats_output.shape)
         return {'input': torch.from_numpy(mats_input).float(),
-                'output': torch.from_numpy(mats_output).float(),
-               'blur':torch.from_numpy(coc).float()}
+                'output': torch.from_numpy(mats_output).float()}
 
 
 class RandomCrop(object):
@@ -168,7 +156,7 @@ class RandomCrop(object):
             self.size = size
 
     def __call__(self, sample):
-        inputs,target,coc = sample['input'], sample['output'],sample['blur']
+        inputs,target = sample['input'], sample['output']
         n, h, w, _ = inputs.shape
         th, tw = self.size
         if w < tw: tw=w
@@ -177,10 +165,8 @@ class RandomCrop(object):
         x1 = random.randint(0, w - tw)
         y1 = random.randint(0, h - th)
         inputs=inputs[:, y1: y1 + th,x1: x1 + tw]
-        coc=coc[:, y1: y1 + th,x1: x1 + tw]
         return {'input':inputs,
-                'output':target[y1: y1 + th,x1: x1 + tw],
-                'blur':coc}
+                'output':target[y1: y1 + th,x1: x1 + tw]}
 
 
 class RandomFilp(object):
@@ -191,21 +177,19 @@ class RandomFilp(object):
         self.ratio = ratio
 
     def __call__(self, sample):
-        inputs,target,coc = sample['input'], sample['output'],sample['blur']
+        inputs,target = sample['input'], sample['output']
 
         # hori filp
         if np.random.binomial(1, self.ratio):
             inputs=inputs[:,:, ::-1]
             target=target[:,::-1]
-            coc=coc[:,:, ::-1]
 
         # vert flip
         if np.random.binomial(1, self.ratio):
             inputs=inputs[:, ::-1]
             target=target[::-1]
-            coc=coc[:, ::-1]
 
-        return {'input': np.ascontiguousarray(inputs), 'output': np.ascontiguousarray(target),'blur': np.ascontiguousarray(coc)}
+        return {'input': np.ascontiguousarray(inputs), 'output': np.ascontiguousarray(target)}
 
 
 

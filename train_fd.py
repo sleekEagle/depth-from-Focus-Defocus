@@ -1,7 +1,6 @@
 from __future__ import print_function
 import argparse
 import os
-import random
 import torch
 import torch.nn as nn
 import torch.backends.cudnn as cudnn
@@ -14,13 +13,10 @@ from models import DFFNet
 from utils import logger, write_log
 torch.backends.cudnn.benchmark=True
 from glob import glob
-import math
 
 '''
 Main code for Ours-FV and Ours-DFV training 
 '''
-
-
 parser = argparse.ArgumentParser(description='DFVDFF')
 # === dataset =====
 parser.add_argument('--dataset', default=['FoD500','DDFF12'], nargs='+',  help='data Name')
@@ -162,35 +158,24 @@ def train(img_stack_in,gt_disp, foc_dist,dataset):
     del regstacked,cost
     return loss.data,vis
 
-def valid(img_stack_in, blur_stack,disp, foc_dist):
+def valid(img_stack_in,disp, foc_dist,dataset):
     model.eval()
     img_stack_in=Variable(torch.FloatTensor(img_stack_in))
     gt_disp=Variable(torch.FloatTensor(disp))
-    img_stack,gt_disp,foc_dist,blur_stack=img_stack_in.cuda(),gt_disp.cuda(),foc_dist.cuda(),blur_stack.cuda()
+    img_stack,gt_disp,foc_dist=img_stack_in.cuda(),gt_disp.cuda(),foc_dist.cuda()
     
     #---------
     mask = gt_disp > 0
     mask.detach_()
     #----
     with torch.no_grad():
-        regdepth,stds,cost= model(img_stack, foc_dist)
-        #print('eval ' +str(regdepth.shape)+' ' +str(aedepth.shape))
+        regdepth,stds,cost= model(img_stack, foc_dist,dataset)
         if(args.reg):
             loss=(F.mse_loss(regdepth[mask] , gt_disp[mask] , reduction='mean')) # use MSE loss for val
-        #if(args.aenet):
-        #    loss=(F.mse_loss(aedepth[mask] , gt_disp[mask] , reduction='mean'))
-        #if(args.conf):
-        #    loss=(F.mse_loss(confdepth[mask] , gt_disp[mask] , reduction='mean'))
-            
 
     vis = {}
     vis['mask'] = mask.type(torch.float).detach().cpu()
-    if(args.reg):
-        vis["pred"]=regdepth.detach().cpu()
-   # if(args.aenet):
-   #     vis["pred"]=aedepth.detach().cpu()
-   # if(args.conf):
-   #     vis["pred"]=confdepth.detach().cpu()
+    vis["pred"]=regdepth.detach().cpu()
     
     return loss, vis
 
@@ -226,8 +211,14 @@ def main():
         #train_log.scalar_summary('lr_epoch', lr_, epoch)
 
         ## training ##
+        gtlist=torch.empty(0,1,224,224)
         for batch_idx, (img_stack, gt_disp,foc_dist,dataset) in enumerate(TrainImgLoader):
             start_time = time.time()
+            break
+            gtlist=torch.cat((gtlist,gt_disp),0)
+            print('pp')
+            continue
+
             floss,viz=train(img_stack,gt_disp,foc_dist,dataset)
 
             if total_iters %10 == 0:
