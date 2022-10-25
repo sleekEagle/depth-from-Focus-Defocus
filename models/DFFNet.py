@@ -10,6 +10,7 @@ from models.featExactor2 import FeatExactor
 # Ours-FV (use_diff=0) and Ours-DFV (use_diff=1) model
 
 def gets2(tensor):
+    tensor=torch.abs(tensor)
     std=torch.std(tensor,axis=1,keepdim=True).repeat_interleave(tensor.shape[1],1)
     mean=torch.mean(tensor,axis=1,keepdim=True).repeat_interleave(tensor.shape[1],1)
     far=torch.abs((tensor-mean)/std)
@@ -29,8 +30,13 @@ class DFFNet(nn.Module):
         self.feature_extraction = FeatExactor()
         self.level = level
         self.use_diff=use_diff
-        self.cameraconst = nn.Parameter(torch.ones(numdatasets), requires_grad=True)
+        self.numdatasets=numdatasets
 
+        self.cameraparam = torch.nn.ParameterDict()
+        self.cameraparam["camera{}".format(0)] = torch.nn.Parameter(data=torch.Tensor([1.4394136]), requires_grad=False)
+        self.cameraparam["camera{}".format(1)] = torch.nn.Parameter(data=torch.Tensor([1.5]), requires_grad=True)
+        self.cameraparam["camera{}".format(2)] = torch.nn.Parameter(data=torch.Tensor([1.5]), requires_grad=False)
+       
         assert level >= 1 and level <= 4
 
         if level == 1:
@@ -106,19 +112,30 @@ class DFFNet(nn.Module):
         #fdstacked=[fddepth3]
         cost_stacked=[cost3]
         fstacked=[]
-        print('cost3:'+str(cost3.shape))
-        fdepth3=gets2(cost3*cameraconst[dataset])
-        fstacked.append(fdepth3)
-        print('fdepth:'+str(fdepth3.shape))
-        #print('fdepth:'+str(fdepth.shape))
+        camconstlist=[]
+        for i in range(self.numdatasets):
+            a=torch.repeat_interleave(self.cameraparam["camera{}".format(i)],dataset.shape[0])
+            a[(dataset!=i).nonzero(as_tuple=True)[0]]=1
+            a=a.view(-1,1,1,1)
+            camconstlist.append(a)
 
+        val=cost3
+        for i in range(self.numdatasets):
+            val*=camconstlist[i]
+        fdepth3=gets2(val)
+
+        fstacked.append(fdepth3)
+        
         #if training the model
         if self.training :
             if self.level >= 2:
                 std4=-1
                 cost4=F.interpolate(cost4, [h, w], mode='bilinear')
                 cost_stacked.append(cost4)
-                fdepth4=gets2(cost4*cameraconst[dataset])
+                val=cost4
+                for i in range(self.numdatasets):
+                    val*=camconstlist[i]
+                fdepth4=gets2(val)
                 fstacked.append(fdepth4)
                 #fdepth4,std4=self.disp_reg(F.softmax(cost4,1),focal_dist, uncertainty=True)        
                 
@@ -126,14 +143,20 @@ class DFFNet(nn.Module):
                     std5=-1
                     cost5=F.interpolate(cost5, [h, w], mode='bilinear')
                     cost_stacked.append(cost5)
-                    fdepth5=gets2(cost5*cameraconst[dataset])
+                    val=cost5
+                    for i in range(self.numdatasets):
+                        val*=camconstlist[i]
+                    fdepth5=gets2(val)
                     fstacked.append(fdepth5)
                     #fdepth5,std5=self.disp_reg(F.softmax(cost5,1),focal_dist, uncertainty=True)
                     if self.level >=4 :
                         std6=-1
                         cost6=F.interpolate(cost6, [h, w], mode='bilinear')
                         cost_stacked.append(cost6)
-                        fdepth6=gets2(cost6*cameraconst[dataset])
+                        val=cost6
+                        for i in range(self.numdatasets):
+                            val*=camconstlist[i]
+                        fdepth6=gets2(val)
                         fstacked.append(fdepth6)
                         #fdepth6,std6=self.disp_reg(F.softmax(cost6,1),focal_dist, uncertainty=True)
                         
@@ -143,11 +166,34 @@ class DFFNet(nn.Module):
             return fdepth3,1,cost3
 
 '''
-model=DFFNet(clean=0)
-stack=torch.rand(4,5,3,224,224)
-focal_dist=torch.rand(1,5)
-out=model(stack,focal_dist,2)
+model=DFFNet(clean=0,level=4)
+stack=torch.rand(6,5,3,224,224)
+focal_dist=torch.rand(6,5)
+dataset=torch.tensor([0,1,2,1,1,0], dtype=torch.long)
+out=model(stack,focal_dist,dataset)
+
+for n,p in model.named_parameters():
+    if('camera' in n):
+         print(n + '  ' + str(p)) 
+
+
+cameraparam = torch.nn.ParameterDict()
+cameraparam["camera{}".format(0)] = torch.nn.Parameter(data=torch.Tensor([1.4394136]), requires_grad=True)
+cameraparam["camera{}".format(1)] = torch.nn.Parameter(data=torch.Tensor([1.0]), requires_grad=True)
+cameraparam["camera{}".format(2)] = torch.nn.Parameter(data=torch.Tensor([1.0]), requires_grad=False)
+
+cameraparam["camera{}".format(0)]
+cost=torch.ones((4,5,20,20))
+a=torch.repeat_interleave(cameraparam["camera{}".format(0)],dataset.shape[0])
+a=torch.where(dataset==0,a,torch.ones(dataset.shape[0])).view(-1,1,1,1)
+cost*a
+
 '''
+
+
+
+     
+
 
 
 

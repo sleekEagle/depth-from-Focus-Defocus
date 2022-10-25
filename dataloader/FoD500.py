@@ -46,9 +46,7 @@ class ImageDataset(torch.utils.data.Dataset):
         self.flag_out_coc = flag_outputs[0]
         self.flag_out_depth = flag_outputs[1]
 
-        #self.focus_dist = [f/max_dpt for f in focus_dist]
-        self.focus_dist = focus_dist
-
+        self.focus_dist = [f/max_dpt for f in focus_dist]
         
         self.max_n_stack = 5
         self.dpth_scale = scale
@@ -80,7 +78,7 @@ class ImageDataset(torch.utils.data.Dataset):
         ##### Read and process an image
         idx_dpt = int(idx)
         img_dpt = read_dpt(self.root_dir + self.imglist_dpt[idx_dpt])
-        #img_dpt=img_dpt/self.max_dpt
+        img_dpt=img_dpt/self.max_dpt
 
         foc_dist = self.focus_dist.copy()
         mat_dpt = img_dpt.copy()[:, :, np.newaxis]
@@ -139,7 +137,8 @@ class ImageDataset(torch.utils.data.Dataset):
         if self.flag_out_depth:
             mats_output = np.concatenate((mats_output,(mat_dpt)), axis=2) # first 5 is COC last is depth  self.dpth2disp
         
-        sample = {'input': mats_input, 'output': mats_output}
+        sample = {'input': mats_input, 'output': mats_output,'blur':(blur_list)}
+
         if self.transform_fnc:
             sample = self.transform_fnc(sample)
         return sample['input'],sample['output'],(torch.tensor(foc_dist)),0
@@ -148,12 +147,14 @@ class ImageDataset(torch.utils.data.Dataset):
 
 class ToTensor(object):
     def __call__(self, sample):
-        mats_input,mats_output = sample['input'], sample['output']
+        mats_input,mats_output,coc = sample['input'], sample['output'],sample['blur']
         mats_input=mats_input.transpose((0, 3, 1, 2))
+        coc=coc.transpose((0, 1, 2))
         mats_output=mats_output.transpose((2, 0, 1))
         # print(mats_input.shape, mats_output.shape)
         return {'input': torch.from_numpy(mats_input).float(),
-                'output': torch.from_numpy(mats_output).float()}
+                'output': torch.from_numpy(mats_output).float(),
+               'blur':torch.from_numpy(coc).float()}
 
 
 class RandomCrop(object):
@@ -167,7 +168,7 @@ class RandomCrop(object):
             self.size = size
 
     def __call__(self, sample):
-        inputs,target = sample['input'], sample['output']
+        inputs,target,coc = sample['input'], sample['output'],sample['blur']
         n, h, w, _ = inputs.shape
         th, tw = self.size
         if w < tw: tw=w
@@ -176,8 +177,10 @@ class RandomCrop(object):
         x1 = random.randint(0, w - tw)
         y1 = random.randint(0, h - th)
         inputs=inputs[:, y1: y1 + th,x1: x1 + tw]
+        coc=coc[:, y1: y1 + th,x1: x1 + tw]
         return {'input':inputs,
-                'output':target[y1: y1 + th,x1: x1 + tw]}
+                'output':target[y1: y1 + th,x1: x1 + tw],
+                'blur':coc}
 
 
 class RandomFilp(object):
@@ -188,18 +191,21 @@ class RandomFilp(object):
         self.ratio = ratio
 
     def __call__(self, sample):
-        inputs,target = sample['input'], sample['output']
+        inputs,target,coc = sample['input'], sample['output'],sample['blur']
 
         # hori filp
         if np.random.binomial(1, self.ratio):
             inputs=inputs[:,:, ::-1]
             target=target[:,::-1]
+            coc=coc[:,:, ::-1]
+
         # vert flip
         if np.random.binomial(1, self.ratio):
             inputs=inputs[:, ::-1]
             target=target[::-1]
+            coc=coc[:, ::-1]
 
-        return {'input': np.ascontiguousarray(inputs), 'output': np.ascontiguousarray(target)}
+        return {'input': np.ascontiguousarray(inputs), 'output': np.ascontiguousarray(target),'blur': np.ascontiguousarray(coc)}
 
 
 

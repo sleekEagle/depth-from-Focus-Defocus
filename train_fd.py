@@ -110,7 +110,9 @@ else:
 if 'FoD500' in args.dataset:
     from dataloader import FoD500Loader
     database = '/data/DFF/baseline/defocus-net/data/fs_6/' if args.FoD_pth is None else  args.FoD_pth
+    database="C:\\Users\\lahir\\focusdata\\fs_6\\fs_6\\"
     FoD500_train, FoD500_val = FoD500Loader(database, n_stack=args.stack_num, scale=args.FoD_scale)
+    dataset_train=FoD500_train
     FoD500_train, FoD500_val =  [FoD500_train], [FoD500_val]
 else:
     FoD500_train, FoD500_val = [], []
@@ -134,34 +136,31 @@ def train(img_stack_in,gt_disp, foc_dist,dataset):
     #---------
     max_val = torch.where(foc_dist>=100, torch.zeros_like(foc_dist), foc_dist) # exclude padding value
     min_val = torch.where(foc_dist<=0, torch.ones_like(foc_dist)*10, foc_dist)  # exclude padding value
-    mask = (gt_disp >= min_val.min(dim=1)[0].view(-1,1,1,1)) & (gt_disp <= max_val.max(dim=1)[0].view(-1,1,1,1))
+    mask = (gt_disp >= min_val.min(dim=1)[0].view(-1,1,1,1)) & (gt_disp <= max_val.max(dim=1)[0].view(-1,1,1,1)) #
     mask.detach_()
     #----
 
     optimizer.zero_grad()
     beta_scale = 1 # smooth l1 do not have beta in 1.6, so we increase the input to and then scale back -- no significant improve according to our trials
-    regstacked,stds,cost= model(img_stack, foc_dist)
+    regstacked,stds,cost= model(img_stack, foc_dist,dataset)
 
     regloss=0
     lvl_w=[8./15, 4./15, 2./15, 1./15]
     for i in range(len(regstacked)):
-        if(args.reg==1):
-            _cur_floss = F.smooth_l1_loss(regstacked[i][mask] * beta_scale, gt_disp[mask]* beta_scale, reduction='none') / beta_scale
-            regloss = regloss + lvl_w[i] * _cur_floss.mean()
+        _cur_floss = F.smooth_l1_loss(regstacked[i][mask] * beta_scale, gt_disp[mask]* beta_scale, reduction='none') / beta_scale
+        regloss = regloss + lvl_w[i] * _cur_floss.mean()
     
     loss=regloss
-    loss.backward()
-        
+    loss.backward()   
     torch.nn.utils.clip_grad_norm_(model.module.parameters(), max_norm=0.5)
     optimizer.step()
     vis={}
     if(args.reg):
         vis['pred']=regstacked[0].detach().cpu()
     vis['mask']=mask.type(torch.float).detach().cpu()
-
+   
     del regstacked,cost
     return loss.data,vis
-
 
 def valid(img_stack_in, blur_stack,disp, foc_dist):
     model.eval()
@@ -228,14 +227,13 @@ def main():
 
         ## training ##
         for batch_idx, (img_stack, gt_disp,foc_dist,dataset) in enumerate(TrainImgLoader):
-            break
             start_time = time.time()
             floss,viz=train(img_stack,gt_disp,foc_dist,dataset)
 
             if total_iters %10 == 0:
                 torch.cuda.synchronize()
-                print('epoch %d:  %d/ %d f_loss = %.6f , b_loss = %.6f , d_loss = %.6f , time = %.2f' % (epoch, batch_idx, len(TrainImgLoader), floss,bloss,dloss, time.time() - start_time))
-                train_log.scalar_summary('loss_batch',floss, total_iters)
+                print('epoch %d:  %d/ %d f_loss = %.6f, time = %.2f' % (epoch, batch_idx, len(TrainImgLoader), floss, time.time() - start_time))
+                #train_log.scalar_summary('loss_batch',floss, total_iters)
 
             total_train_loss += floss
             total_iters += 1
