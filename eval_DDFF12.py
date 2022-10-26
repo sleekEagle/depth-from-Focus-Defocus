@@ -21,7 +21,7 @@ Code for Ours-FV and Ours-DFV evaluation on DDFF-12 dataset
 
 # os.environ['CUDA_VISIBLE_DEVICES'] = '1'
 parser = argparse.ArgumentParser(description='DFVDFF')
-parser.add_argument('--data_path', default='/data/DFF/my_ddff_trainVal.h5',help='test data path')
+parser.add_argument('--data_path', default='C:\\Users\\lahir\\focusdata\\my_dff_trainVal.h5',help='test data path')
 parser.add_argument('--loadmodel', default=None, help='model path')
 parser.add_argument('--outdir', default='./DDFF12/',help='output dir')
 
@@ -30,11 +30,6 @@ parser.add_argument('--min_disp', type=float ,default=0.02, help='minium dispari
 
 parser.add_argument('--stack_num', type=int ,default=5, help='num of image in a stack, please take a number in [2, 10], change it according to the loaded checkpoint!')
 parser.add_argument('--use_diff',type=int, default=0, choices=[0,1], help='if use differential images as input, change it according to the loaded checkpoint!')
-parser.add_argument('--blur', default=0, type=int, choices=[0,1], help='if use blur training, 0: No,  1: Use blur supervision')
-parser.add_argument('--reg', default=0, type=int, choices=[0,1,2], help='how to fuse defocus cues and focus scores, 0: only focus (equivalent to DFV paper),  1: Only defocus based, 2: final depth=(defocus+focus)/2')
-parser.add_argument('--aenet', default=0, type=int, choices=[0,1], help='What kind of depth regression used for DFF')
-parser.add_argument('--conf', default=0, type=int, choices=[0,1], help='What kind of depth regression used for DFF')
-
 parser.add_argument('--level', type=int, default=4, help='num of layers in network, please take a number in [1, 4]')
 args = parser.parse_args()
 
@@ -160,7 +155,7 @@ def main(image_size = (383, 552)):
                             n_stack=args.stack_num,
                             min_disp=args.min_disp, max_disp=args.max_disp, b_test=True
                             )
-    dataloader = DataLoader(test_set, batch_size=1, shuffle=False, num_workers=1)
+    dataloader = DataLoader(test_set, batch_size=1, shuffle=False, num_workers=0)
 
 
     # metric prepare
@@ -170,7 +165,7 @@ def main(image_size = (383, 552)):
     n_er=np.zeros(len(ranges)-1,dtype=int)
     test_num = len(dataloader)
     time_rec = np.zeros(test_num)
-    for inx,(img_stack,disp,_,foc_dist) in enumerate(dataloader):
+    for inx,(img_stack,disp,foc_dist,dataset) in enumerate(dataloader):
         # if inx not in [34, 19, 25, 74, 108]: continue # paper viz images
         if inx % 10 == 0:
             print('processing: {}/{}'.format(inx, test_num))
@@ -182,17 +177,13 @@ def main(image_size = (383, 552)):
         with torch.no_grad():
             torch.cuda.synchronize()
             start_time = time.time()
-            pred_fdepth,stds,pred_aedepth,pred_confdepth,focusMap=model(img_stack, foc_dist)
-            pred_disp=0
-            if(args.conf):
-                pred_disp=pred_confdepth
-            elif(args.reg):pred_disp=pred_fdepth
-            elif(args.aenet):pred_disp=pred_aedepth
+            pred_fdepth,stds,focusMap=model(img_stack, foc_dist,dataset)
+            pred_disp=pred_fdepth
             torch.cuda.synchronize()
             ttime = (time.time() - start_time); #print('time = %.2f' % (ttime*1000) )
             time_rec[inx] = ttime
-        pred_disp*=args.max_disp
-        gt_disp*=args.max_disp
+        #pred_disp*=args.max_disp
+        #gt_disp*=args.max_disp
      
         pred_disp = pred_disp.squeeze().cpu().numpy()[:image_size[0], :image_size[1]]
         gt_disp = gt_disp.squeeze().numpy()[:image_size[0], :image_size[1]]
