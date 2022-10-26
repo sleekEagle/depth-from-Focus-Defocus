@@ -250,7 +250,10 @@ def main(image_size = (383, 552)):
         avg_er+=er_sums
         n_er+=er_counts
         avgmetrics[:,:-1] += metrics
-        avgmetrics[:, -1] += stds.mean().detach().cpu().numpy()
+        if(type(stds)==int):
+            avgmetrics[:, -1] += stds
+        else:
+            avgmetrics[:, -1] += stds.mean().detach().cpu().numpy()
         torch.cuda.empty_cache()
 
     final_res = (avgmetrics /test_num)[0]
