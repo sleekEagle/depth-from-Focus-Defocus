@@ -151,8 +151,7 @@ def train(img_stack_in,gt_disp, foc_dist,dataset):
     torch.nn.utils.clip_grad_norm_(model.module.parameters(), max_norm=0.5)
     optimizer.step()
     vis={}
-    if(args.reg):
-        vis['pred']=regstacked[0].detach().cpu()
+    vis['pred']=regstacked[0].detach().cpu()
     vis['mask']=mask.type(torch.float).detach().cpu()
    
     del regstacked,cost
