@@ -10,16 +10,15 @@ from models.featExactor2 import FeatExactor
 # Ours-FV (use_diff=0) and Ours-DFV (use_diff=1) model
 
 def gets2(tensor):
-    tensor=torch.abs(tensor)
     std=torch.std(tensor,axis=1,keepdim=True).repeat_interleave(tensor.shape[1],1)
     mean=torch.mean(tensor,axis=1,keepdim=True).repeat_interleave(tensor.shape[1],1)
     far=torch.abs((tensor-mean)/std)
     #detect outliers
     outlier=far<1.6
     #remove outliers
-    clean=torch.where(outlier,tensor,mean)
+    clean=torch.where(outlier,tensor,torch.zeros(tensor.shape[1]))
     #calculate depth
-    s2=1/torch.mean(clean,axis=1,keepdim=True)
+    s2=1/(torch.sum(clean,axis=1,keepdim=True)/torch.sum(outlier))
     return s2
 
 class DFFNet(nn.Module):

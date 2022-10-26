@@ -23,6 +23,7 @@ class DDFF12Loader(Dataset):
                 on a sample.
         """
         # Disable opencv threading since it leads to deadlocks in PyTorch DataLoader
+        self.scale=5.0
         self.hdf5 = h5py.File(hdf5_filename, 'r')
         self.stack_key = stack_key
         self.disp_key = disp_key
@@ -94,7 +95,7 @@ class DDFF12Loader(Dataset):
             out_imgs = out_imgs[:,:, :256, :256]
         
         
-        return out_imgs,out_disp,disp_dist,1
+        return out_imgs,out_disp*self.scale,disp_dist*self.scale,1
     
     def __create_preprocessing(self, crop_size=None, cliprange=[0.0202, 0.2825], mean=[0.485, 0.456, 0.406],
                                std=[0.229, 0.224, 0.225], b_filp=True):

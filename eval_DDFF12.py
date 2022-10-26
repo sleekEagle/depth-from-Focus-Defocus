@@ -246,7 +246,7 @@ def main(image_size = (383, 552)):
         #
         #     cv2.imwrite('{}/{}_err.png'.format(img_save_pth, inx), err*2550)
 
-        metrics,er_sums,er_counts = calmetrics( pred_disp, gt_disp, 1.0, accthrs, bumpinessclip=0.05, ignore_zero=True)
+        metrics,er_sums,er_counts = calmetrics( pred_disp/5, gt_disp/5, 1.0, accthrs, bumpinessclip=0.05, ignore_zero=True)
         avg_er+=er_sums
         n_er+=er_counts
         avgmetrics[:,:-1] += metrics

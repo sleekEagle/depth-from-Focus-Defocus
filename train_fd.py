@@ -29,11 +29,6 @@ parser.add_argument('--FoD_scale', default=0.2,
 parser.add_argument('--stack_num', type=int ,default=5, help='num of image in a stack, please take a number in [2, 10]')
 parser.add_argument('--level', type=int ,default=4, help='num of layers in network, please take a number in [1, 4]')
 parser.add_argument('--use_diff', default=1, type=int, choices=[0,1], help='if use differential feat, 0: None,  1: diff cost volume')
-parser.add_argument('--blur', default=0, type=int, choices=[0,1], help='if use blur training, 0: No,  1: Use blur supervision')
-parser.add_argument('--reg', default=0, type=int, choices=[0,1,2], help='how to fuse defocus cues and focus scores, 0: only focus (equivalent to DFV paper),  1: Only defocus based, 2: final depth=(defocus+focus)/2')
-parser.add_argument('--aenet', default=0, type=int, choices=[0,1], help='What kind of depth regression used for DFF')
-parser.add_argument('--cnn', default=0, type=int, choices=[0,1,2,3,4], help='number of CNN layers of the depth prediction CNN')
-parser.add_argument('--lmd', default=0, type=float, help='total_loss=other_loss+lmd*blur_loss')
 parser.add_argument('--lvl_w', nargs='+', default=[8./15, 4./15, 2./15, 1./15],  help='for std weight')
 
 
@@ -208,7 +203,7 @@ def main():
         #train_log.scalar_summary('lr_epoch', lr_, epoch)
 
         ## training ##
-        gtlist=torch.empty(0,1,224,224)
+        #gtlist=torch.empty(0,1,224,224)
         for batch_idx, (img_stack, gt_disp,foc_dist,dataset) in enumerate(TrainImgLoader):
             start_time = time.time()
             #gtlist=torch.cat((gtlist,gt_disp),0)
