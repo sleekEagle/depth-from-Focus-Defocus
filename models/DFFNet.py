@@ -35,7 +35,7 @@ class DFFNet(nn.Module):
         self.cameraparam = torch.nn.ParameterDict()
         self.cameraparam["camera{}".format(0)] = torch.nn.Parameter(data=torch.Tensor([1.4394136]), requires_grad=False)
         self.cameraparam["camera{}".format(1)] = torch.nn.Parameter(data=torch.Tensor([1.5]), requires_grad=True)
-        self.cameraparam["camera{}".format(2)] = torch.nn.Parameter(data=torch.Tensor([1.5]), requires_grad=False)
+        self.cameraparam["camera{}".format(2)] = torch.nn.Parameter(data=torch.Tensor([1.5]), requires_grad=True)
        
         assert level >= 1 and level <= 4
 
