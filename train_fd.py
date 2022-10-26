@@ -91,10 +91,10 @@ print('Number of model parameters: {}'.format(sum([p.data.nelement() for p in mo
 
 # ============ data loader ==============
 #Create data loader
-
 if  'DDFF12' in args.dataset:
     from dataloader import DDFF12Loader
     database = '/data/DFF/my_ddff_trainVal.h5' if args.DDFF12_pth is None else  args.DDFF12_pth
+    database='C:\\Users\\lahir\\focusdata\\my_dff_trainVal.h5'
     DDFF12_train = DDFF12Loader(database, stack_key="stack_train", disp_key="disp_train", n_stack=args.stack_num,
                                  min_disp=0.02, max_disp=0.28)
     DDFF12_val = DDFF12Loader(database, stack_key="stack_val", disp_key="disp_val", n_stack=args.stack_num,
@@ -116,7 +116,7 @@ else:
 dataset_train = torch.utils.data.ConcatDataset(DDFF12_train+FoD500_train)
 dataset_val = torch.utils.data.ConcatDataset(DDFF12_val) # we use the model perform better on  DDFF12_val
 
-TrainImgLoader = torch.utils.data.DataLoader(dataset=dataset_train, num_workers=4, batch_size=args.batchsize, shuffle=True, drop_last=True)
+TrainImgLoader = torch.utils.data.DataLoader(dataset=dataset_train, num_workers=0, batch_size=args.batchsize, shuffle=True, drop_last=True)
 ValImgLoader = torch.utils.data.DataLoader(dataset=dataset_val, num_workers=1, batch_size=12, shuffle=False, drop_last=True)
 
 print('%d batches per epoch'%(len(TrainImgLoader)))
@@ -158,7 +158,7 @@ def train(img_stack_in,gt_disp, foc_dist,dataset):
     del regstacked,cost
     return loss.data,vis
 
-def valid(img_stack_in,disp, foc_dist,dataset):
+def valid(img_stack_in,disp,foc_dist,dataset):
     model.eval()
     img_stack_in=Variable(torch.FloatTensor(img_stack_in))
     gt_disp=Variable(torch.FloatTensor(disp))
@@ -170,9 +170,7 @@ def valid(img_stack_in,disp, foc_dist,dataset):
     #----
     with torch.no_grad():
         regdepth,stds,cost= model(img_stack, foc_dist,dataset)
-        if(args.reg):
-            loss=(F.mse_loss(regdepth[mask] , gt_disp[mask] , reduction='mean')) # use MSE loss for val
-
+        loss=(F.mse_loss(regdepth[mask] , gt_disp[mask] , reduction='mean')) # use MSE loss for val
     vis = {}
     vis['mask'] = mask.type(torch.float).detach().cpu()
     vis["pred"]=regdepth.detach().cpu()
@@ -214,10 +212,7 @@ def main():
         gtlist=torch.empty(0,1,224,224)
         for batch_idx, (img_stack, gt_disp,foc_dist,dataset) in enumerate(TrainImgLoader):
             start_time = time.time()
-            break
-            gtlist=torch.cat((gtlist,gt_disp),0)
-            print('pp')
-            continue
+            #gtlist=torch.cat((gtlist,gt_disp),0)
 
             floss,viz=train(img_stack,gt_disp,foc_dist,dataset)
 
@@ -251,10 +246,10 @@ def main():
         # Vaild
         if epoch % 5 == 0:
             total_val_loss = 0
-            for batch_idx, (img_stack, gt_disp, blur_stack,foc_dist) in enumerate(ValImgLoader):
+            for batch_idx, (img_stack, gt_disp,foc_dist,dataset) in enumerate(ValImgLoader):
                 with torch.no_grad():
                     start_time = time.time()
-                    val_loss,viz=valid(img_stack,blur_stack,gt_disp,foc_dist)
+                    val_loss,viz=valid(img_stack,gt_disp,foc_dist,dataset)
 
                 if batch_idx %10 == 0:
                     torch.cuda.synchronize()

@@ -33,7 +33,7 @@ class DDFF12Loader(Dataset):
 
         assert n_stack <= self.max_n_stack, 'DDFF12 has maximum 10 images per stack!'
         self.n_stack = n_stack
-        self.disp_dist = torch.linspace(max_disp,min_disp, steps=self.max_n_stack)/max_disp
+        self.disp_dist = torch.linspace(max_disp,min_disp, steps=self.max_n_stack)
 
         if transform is None:
             if 'train' in self.stack_key:
@@ -68,14 +68,7 @@ class DDFF12Loader(Dataset):
                 b = self.hdf5[self.disp_key][idx]
                 print(len(self.hdf5[self.stack_key]), idx, a is None, b is None)
                 exit(1)
-        sample['output']=sample['output']/self.max_disp   
-        blur_list=[]
-        for i in range(self.max_n_stack):
-            blur = self.camera.get_coc(self.disp_dist[i].item(), sample['output'])
-            blur = np.clip(blur, 0, 6.908e-4)/6.908e-4
-            blur_list.append(blur)
-        blur_list=np.stack(blur_list).squeeze()
-        sample['blur']=blur_list
+        sample['output']=sample['output']
 
         # Transform sample with data augmentation transformers
         if self.transform :
@@ -92,17 +85,13 @@ class DDFF12Loader(Dataset):
             out_imgs = sample_out['input'][rand_idx]
             out_disp = sample_out['output']
             disp_dist = self.disp_dist[rand_idx]
-            blur_imgs=sample_out['blur'][rand_idx]
         else:
             out_imgs=sample_out['input']
             out_disp=sample_out['output']
             disp_dist=self.disp_dist
-            blur_imgs=sample_out['blur']
-
         if 'val' in self.disp_key and (not self.b_test):
             out_disp = out_disp[:, :256, :256]
             out_imgs = out_imgs[:,:, :256, :256]
-            blur_imgs=blur_imgs[:, :256, :256]
         
         
         return out_imgs,out_disp,disp_dist,1
@@ -139,7 +128,6 @@ class DDFF12Loader(Dataset):
             # torch image: C X H X W
             sample['input'] = torch.from_numpy(sample['input'].transpose((0, 3, 1, 2))).float().div(255) #I add div 255
             sample['output'] = torch.from_numpy(sample['output']).float()
-            sample['blur']=torch.from_numpy(sample['blur'])
             return sample
 
     class Normalize(object):
@@ -164,7 +152,7 @@ class DDFF12Loader(Dataset):
                                                                     std=self.std_output)
 
 
-            return {'input': input_images, 'output': output_image,'blur':sample['blur']}
+            return {'input': input_images, 'output': output_image}
 
     class ClipGroundTruth(object):
         def __init__(self, lower_bound, upper_bound):
@@ -184,21 +172,19 @@ class DDFF12Loader(Dataset):
             self.ratio = ratio
 
         def __call__(self, sample):
-            inputs, target,blur = sample['input'], sample['output'],sample['blur']
+            inputs, target = sample['input'], sample['output']
 
             # hori filp
             if np.random.binomial(1, self.ratio):
                 inputs = inputs[:, :, ::-1]
-                blur = blur[:, :, ::-1]
                 target = target[:, ::-1]
 
             # vert flip
             if np.random.binomial(1, self.ratio):
                 inputs = inputs[:, ::-1]
-                blur = blur[:, ::-1]
                 target = target[::-1]
 
-            return {'input': np.ascontiguousarray(inputs), 'output': np.ascontiguousarray(target),'blur':np.ascontiguousarray(blur)}
+            return {'input': np.ascontiguousarray(inputs), 'output': np.ascontiguousarray(target)}
 
 
     class RandomCrop(object):
@@ -229,16 +215,14 @@ class DDFF12Loader(Dataset):
                 output_image = sample['output'][:, y:(y + new_h), x:(x + new_w)]
                 if self.__is_valid_crop(output_image):
                     input_images = sample['input'][:, :, y:(y + new_h), x:(x + new_w)]
-                    blur = sample['blur'][:, y:(y + new_h), x:(x + new_w)]
-                    return {'input': input_images, 'output': output_image,'blur':blur}
+                    return {'input': input_images, 'output': output_image}
 
             # No valid crop found. Return any crop
             top = np.random.randint(0, h - new_h)
             left = np.random.randint(0, w - new_w)
             input_images =  sample['input'][:, :, top:(top + new_h), left:(left + new_w)]
-            blur =  sample['blur'][:, top:(top + new_h), left:(left + new_w)]
             output_image = sample['output'][:, top:(top + new_h), left:(left + new_w)]
-            return {'input': input_images, 'output': output_image,'blur':blur}
+            return {'input': input_images, 'output': output_image}
 
     class PadSamples(object):
         def __init__(self, output_size, ground_truth_pad_value=0.0):
@@ -258,9 +242,6 @@ class DDFF12Loader(Dataset):
             sample['input'] = torch.stack(
                 [torch.from_numpy(np.pad(sample_input.numpy(), ((0, 0), (0, padh), (0, padw)), mode="reflect")).float()
                  for sample_input in sample['input']])
-            sample['blur'] = torch.stack(
-                [torch.from_numpy(np.pad(sample_input.numpy(), ((0, padh), (0, padw)), mode="constant")).float()
-                 for sample_input in sample['blur']])
             sample['output'] = torch.from_numpy(
                 np.pad(sample['output'].numpy(), ((0, 0), (0, padh), (0, padw)), mode="constant",
                        constant_values=self.ground_truth_pad_value)).float()
@@ -274,6 +255,4 @@ class DDFF12Loader(Dataset):
         def __call__(self, sample):
             sample['input'] = torch.stack([sample['input'][i] for i in
                                            np.random.choice(sample['input'].shape[0], self.output_size, replace=False)])
-            sample['blur'] = torch.stack([sample['blur'][i] for i in
-                                           np.random.choice(sample['blur'].shape[0], self.output_size, replace=False)])
             return sample
