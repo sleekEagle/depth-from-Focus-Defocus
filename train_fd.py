@@ -128,20 +128,33 @@ def train(img_stack_in,gt_disp, foc_dist,dataset):
     max_val = torch.where(foc_dist>=100, torch.zeros_like(foc_dist), foc_dist) # exclude padding value
     min_val = torch.where(foc_dist<=0, torch.ones_like(foc_dist)*10, foc_dist)  # exclude padding value
     mask = (gt_disp >= min_val.min(dim=1)[0].view(-1,1,1,1)) & (gt_disp <= max_val.max(dim=1)[0].view(-1,1,1,1)) #
+    mask_tiled=torch.repeat_interleave(mask,repeats=5,dim=1)
+    mask_blur=torch.repeat_interleave(mask,repeats=1,dim=1)
     mask.detach_()
+    mask_tiled.detach_()
+    mask_blur.detach_()
     #----
 
     optimizer.zero_grad()
     beta_scale = 1 # smooth l1 do not have beta in 1.6, so we increase the input to and then scale back -- no significant improve according to our trials
     regstacked,stds,cost= model(img_stack, foc_dist,dataset)
 
-    regloss=0
+    gt_disp_=torch.repeat_interleave(gt_disp,repeats=img_stack_in.shape[1],dim=1)
+    foc_dist_=foc_dist.view(foc_dist.shape[0],foc_dist.shape[1],1,1)
+    foc_dist_=torch.repeat_interleave(foc_dist_,repeats=gt_disp.shape[-1],dim=-1)
+    foc_dist_=torch.repeat_interleave(foc_dist_,repeats=gt_disp.shape[-2],dim=-2)
+    blur=torch.abs(1-foc_dist_/gt_disp_)
+
+    dloss,bloss=0,0
     lvl_w=[8./15, 4./15, 2./15, 1./15]
     for i in range(len(regstacked)):
         _cur_floss = F.smooth_l1_loss(regstacked[i][mask] * beta_scale, gt_disp[mask]* beta_scale, reduction='none') / beta_scale
-        regloss = regloss + lvl_w[i] * _cur_floss.mean()
+        dloss = dloss + lvl_w[i] * _cur_floss.mean()
+        if(args.blur>0):
+            _cur_bloss=F.mse_loss(cost[i][mask_tiled],blur[mask_tiled],reduction='none').mean()
+            bloss = bloss + lvl_w[i] * _cur_bloss.mean()
     
-    loss=regloss
+    loss=dloss+args.blur*bloss
     loss.backward()   
     torch.nn.utils.clip_grad_norm_(model.module.parameters(), max_norm=0.5)
     optimizer.step()
@@ -150,7 +163,7 @@ def train(img_stack_in,gt_disp, foc_dist,dataset):
     vis['mask']=mask.type(torch.float).detach().cpu()
    
     del regstacked,cost
-    return loss.data,vis
+    return loss.data, dloss.item(),bloss.item()*args.blur,vis
 
 def valid(img_stack_in,disp,foc_dist,dataset):
     model.eval()
@@ -207,13 +220,13 @@ def main():
         for batch_idx, (img_stack, gt_disp,foc_dist,dataset) in enumerate(TrainImgLoader):
             start_time = time.time()
             #gtlist=torch.cat((gtlist,gt_disp),0)
-            floss,viz=train(img_stack,gt_disp,foc_dist,dataset)
+            loss,dloss,bloss,viz=train(img_stack,gt_disp,foc_dist,dataset)
             if total_iters %10 == 0:
                 torch.cuda.synchronize()
-                print('epoch %d:  %d/ %d f_loss = %.6f, time = %.2f' % (epoch, batch_idx, len(TrainImgLoader), floss, time.time() - start_time))
-                train_log.scalar_summary('loss_batch',floss, total_iters)
+                print('epoch %d:  %d/ %d loss = %.6f, dloss = %.6f, bloss = %.6f, time = %.2f' % (epoch, batch_idx, len(TrainImgLoader), loss,dloss,bloss, time.time() - start_time))
+                train_log.scalar_summary('loss_batch',loss, total_iters)
 
-            total_train_loss += floss
+            total_train_loss += loss
             total_iters += 1
         # record the last batch
         write_log(viz, img_stack[:, 0], img_stack[:, -1], gt_disp, train_log, epoch, thres=0.05)
