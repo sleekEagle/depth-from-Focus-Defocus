@@ -94,7 +94,7 @@ class DDFF12Loader(Dataset):
             out_disp = out_disp[:, :256, :256]
             out_imgs = out_imgs[:,:, :256, :256]
         
-        #sort in the ascending orider
+        #sort in the ascending orider. its already sorted in the descending order of focal distance
         out_imgs=torch.flip(out_imgs,[0])
         disp_dist=torch.flip(disp_dist,[0])
         return out_imgs,out_disp*self.scale,disp_dist*self.scale,1
