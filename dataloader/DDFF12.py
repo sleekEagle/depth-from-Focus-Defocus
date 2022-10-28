@@ -94,7 +94,9 @@ class DDFF12Loader(Dataset):
             out_disp = out_disp[:, :256, :256]
             out_imgs = out_imgs[:,:, :256, :256]
         
-        
+        #sort in the ascending orider
+        out_imgs=torch.flip(out_imgs,[0])
+        disp_dist=torch.flip(disp_dist,[0])
         return out_imgs,out_disp*self.scale,disp_dist*self.scale,1
     
     def __create_preprocessing(self, crop_size=None, cliprange=[0.0202, 0.2825], mean=[0.485, 0.456, 0.406],

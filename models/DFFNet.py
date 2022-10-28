@@ -31,9 +31,9 @@ class depthNet(nn.Module):
         super(depthNet, self).__init__()
         self.layers = nn.ModuleList()
         if(cnnlayers==1):
-            self.layers.append(nn.Conv2d(n_fs, 1, kernel_size=1, stride=1, padding=0))
+            self.layers.append(nn.Conv2d(n_fs*2, 1, kernel_size=1, stride=1, padding=0))
         else:
-            self.layers.append(nn.Conv2d(n_fs, 32, kernel_size=1, stride=1, padding=0))
+            self.layers.append(nn.Conv2d(n_fs*2, 32, kernel_size=1, stride=1, padding=0))
             for i in range(cnnlayers-1):
                 if(i==(cnnlayers-2)):
                     self.layers.append(nn.Conv2d(32, 1, kernel_size=1, stride=1, padding=0))
@@ -196,15 +196,21 @@ class DFFNet(nn.Module):
         #print(torch.min(cost3))
         for i in range(self.numdatasets):
             val*=camconstlist[i]
-
-        depth_scaled=self.depthnet(val)
+        foc_ar=focal_dist.unsqueeze(dim=2).unsqueeze(dim=3).\
+        repeat_interleave(cost3.shape[2],dim=2).\
+        repeat_interleave(cost3.shape[3],dim=3)
+        #print('val : '+str(val.shape))
+        depthinp=torch.cat([val,foc_ar],dim=1)
+        #print('depthinp : '+str(depthinp.shape))
+        depth3=self.depthnet(depthinp)
+        fstacked.append(depth3)
+        '''
         max_f,_=torch.max(focal_dist,dim=1,keepdim=True)
         max_f=max_f.view(-1,1,1,1)
         max_f=torch.repeat_interleave(max_f,depth_scaled.shape[-1],-1)
         max_f=torch.repeat_interleave(max_f,depth_scaled.shape[-2],-2)
         depth3=depth_scaled*max_f
-        fstacked.append(depth3)
-        
+        '''
         #if training the model
         if self.training :
             if self.level >= 2:
@@ -214,8 +220,8 @@ class DFFNet(nn.Module):
                 val=cost4
                 for i in range(self.numdatasets):
                     val*=camconstlist[i]
-                depth_scaled=self.depthnet(val)
-                depth4=depth_scaled*max_f
+                depthinp=torch.cat([val,foc_ar],dim=1)
+                depth4=self.depthnet(depthinp)
                 fstacked.append(depth4)
                 #fdepth4,std4=self.disp_reg(F.softmax(cost4,1),focal_dist, uncertainty=True)        
                 
@@ -226,8 +232,8 @@ class DFFNet(nn.Module):
                     val=cost5
                     for i in range(self.numdatasets):
                         val*=camconstlist[i]
-                    depth_scaled=self.depthnet(val)
-                    depth5=depth_scaled*max_f
+                    depthinp=torch.cat([val,foc_ar],dim=1)
+                    depth5=self.depthnet(depthinp)
                     fstacked.append(depth5)
                     #fdepth5,std5=self.disp_reg(F.softmax(cost5,1),focal_dist, uncertainty=True)
                     if self.level >=4 :
@@ -237,8 +243,8 @@ class DFFNet(nn.Module):
                         val=cost6
                         for i in range(self.numdatasets):
                             val*=camconstlist[i]
-                        depth_scaled=self.depthnet(val)
-                        depth6=depth_scaled*max_f
+                        depthinp=torch.cat([val,foc_ar],dim=1)
+                        depth6=self.depthnet(depthinp)
                         fstacked.append(depth6)
                         #fdepth6,std6=self.disp_reg(F.softmax(cost6,1),focal_dist, uncertainty=True)
                         

@@ -38,6 +38,7 @@ parser.add_argument('--batchsize', type=int, default=20, help='samples per batch
 
 
 # ====== log path ==========
+#parser.add_argument('--loadmodel', default='C:\\Users\\lahir\\focusdata\\FoD500_DDFF12_scale0.2_nsck5_lr0.0001_ep700_b20_lvl4_diffFeat1\\best.tar',   help='path to pre-trained checkpoint if any')
 parser.add_argument('--loadmodel', default=None,   help='path to pre-trained checkpoint if any')
 parser.add_argument('--savemodel', default='C:\\Users\\lahir\\focusdata\\', help='save path')
 parser.add_argument('--seed', type=int, default=2021, metavar='S',  help='random seed (default: 2021)')
@@ -219,6 +220,7 @@ def main():
         #gtlist=torch.empty(0,1,224,224)
         for batch_idx, (img_stack, gt_disp,foc_dist,dataset) in enumerate(TrainImgLoader):
             start_time = time.time()
+            break
             #gtlist=torch.cat((gtlist,gt_disp),0)
             loss,dloss,bloss,viz=train(img_stack,gt_disp,foc_dist,dataset)
             if total_iters %10 == 0:
