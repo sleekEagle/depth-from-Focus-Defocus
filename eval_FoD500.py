@@ -13,8 +13,6 @@ parser = argparse.ArgumentParser(description='DFVDFF')
 parser.add_argument('--res_path', default=None, help='test result path')
 args = parser.parse_args()
 
-
-
 def calmetrics( pred, target, mse_factor, accthrs, bumpinessclip=0.05, ignore_zero=True):
     metrics = np.zeros((1, 7 + len(accthrs)), dtype=float)
 

@@ -27,7 +27,7 @@ parser.add_argument('--FoD_scale', default=0.2,
                          'empirically we find this scale help improve the model performance for our method and DDFF')
 # ==== hyper-param =========
 parser.add_argument('--stack_num', type=int ,default=5, help='num of image in a stack, please take a number in [2, 10]')
-parser.add_argument('--level', type=int ,default=4, help='num of layers in network, please take a number in [1, 4]')
+parser.add_argument('--level', type=int ,default=1, help='num of layers in network, please take a number in [1, 4]')
 parser.add_argument('--use_diff', default=1, type=int, choices=[0,1], help='if use differential feat, 0: None,  1: diff cost volume')
 parser.add_argument('--lvl_w', nargs='+', default=[8./15, 4./15, 2./15, 1./15],  help='for std weight')
 
@@ -39,7 +39,7 @@ parser.add_argument('--batchsize', type=int, default=20, help='samples per batch
 
 # ====== log path ==========
 parser.add_argument('--loadmodel', default=None,   help='path to pre-trained checkpoint if any')
-parser.add_argument('--savemodel', default=None, help='save path')
+parser.add_argument('--savemodel', default='C:\\Users\\lahir\\focusdata\\', help='save path')
 parser.add_argument('--seed', type=int, default=2021, metavar='S',  help='random seed (default: 2021)')
 
 args = parser.parse_args()
@@ -112,7 +112,7 @@ dataset_train = torch.utils.data.ConcatDataset(DDFF12_train+FoD500_train)
 dataset_val = torch.utils.data.ConcatDataset(DDFF12_val) # we use the model perform better on  DDFF12_val
 
 TrainImgLoader = torch.utils.data.DataLoader(dataset=dataset_train, num_workers=0, batch_size=args.batchsize, shuffle=True, drop_last=True)
-ValImgLoader = torch.utils.data.DataLoader(dataset=dataset_val, num_workers=1, batch_size=12, shuffle=False, drop_last=True)
+ValImgLoader = torch.utils.data.DataLoader(dataset=dataset_val, num_workers=0, batch_size=12, shuffle=False, drop_last=True)
 
 print('%d batches per epoch'%(len(TrainImgLoader)))
 
@@ -199,25 +199,22 @@ def main():
 
     for epoch in range(start_epoch, args.epochs+1):
         total_train_loss = 0
-        #lr_ = adjust_learning_rate(optimizer,epoch)
-        #train_log.scalar_summary('lr_epoch', lr_, epoch)
+        lr_ = adjust_learning_rate(optimizer,epoch)
+        train_log.scalar_summary('lr_epoch', lr_, epoch)
 
         ## training ##
         #gtlist=torch.empty(0,1,224,224)
         for batch_idx, (img_stack, gt_disp,foc_dist,dataset) in enumerate(TrainImgLoader):
             start_time = time.time()
             #gtlist=torch.cat((gtlist,gt_disp),0)
-
             floss,viz=train(img_stack,gt_disp,foc_dist,dataset)
-
             if total_iters %10 == 0:
                 torch.cuda.synchronize()
                 print('epoch %d:  %d/ %d f_loss = %.6f, time = %.2f' % (epoch, batch_idx, len(TrainImgLoader), floss, time.time() - start_time))
-                #train_log.scalar_summary('loss_batch',floss, total_iters)
+                train_log.scalar_summary('loss_batch',floss, total_iters)
 
             total_train_loss += floss
             total_iters += 1
-
         # record the last batch
         write_log(viz, img_stack[:, 0], img_stack[:, -1], gt_disp, train_log, epoch, thres=0.05)
         train_log.scalar_summary('avg_loss', total_train_loss / len(TrainImgLoader), epoch)

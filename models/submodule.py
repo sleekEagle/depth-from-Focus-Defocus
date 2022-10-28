@@ -144,5 +144,5 @@ class decoderBlock(nn.Module):
                 costl=fvl
             else:
                 costl = self.classify(fvl)
-
+        costl=F.relu(costl)
         return fvl,costl.squeeze(1)

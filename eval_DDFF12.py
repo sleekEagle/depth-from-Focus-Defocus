@@ -22,7 +22,7 @@ Code for Ours-FV and Ours-DFV evaluation on DDFF-12 dataset
 # os.environ['CUDA_VISIBLE_DEVICES'] = '1'
 parser = argparse.ArgumentParser(description='DFVDFF')
 parser.add_argument('--data_path', default='C:\\Users\\lahir\\focusdata\\my_dff_trainVal.h5',help='test data path')
-parser.add_argument('--loadmodel', default=None, help='model path')
+parser.add_argument('--loadmodel', default='C:\\Users\\lahir\\focusdata\\\FoD500_DDFF12_scale0.2_nsck5_lr0.0001_ep700_b20_lvl1_diffFeat1\\best.tar', help='model path')
 parser.add_argument('--outdir', default='./DDFF12/',help='output dir')
 
 parser.add_argument('--max_disp', type=float ,default=0.28, help='maxium disparity')
