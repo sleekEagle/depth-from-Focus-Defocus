@@ -27,10 +27,10 @@ parser.add_argument('--FoD_scale', default=0.2,
                          'empirically we find this scale help improve the model performance for our method and DDFF')
 # ==== hyper-param =========
 parser.add_argument('--stack_num', type=int ,default=5, help='num of image in a stack, please take a number in [2, 10]')
-parser.add_argument('--level', type=int ,default=1, help='num of layers in network, please take a number in [1, 4]')
+parser.add_argument('--level', type=int ,default=4, help='num of layers in network, please take a number in [1, 4]')
 parser.add_argument('--use_diff', default=1, type=int, choices=[0,1], help='if use differential feat, 0: None,  1: diff cost volume')
 parser.add_argument('--lvl_w', nargs='+', default=[8./15, 4./15, 2./15, 1./15],  help='for std weight')
-
+parser.add_argument('--blur', type=float, default=0.01,  help='loss weight for blur')
 
 parser.add_argument('--lr', type=float, default=0.0001,  help='learning rate')
 parser.add_argument('--epochs', type=int, default=700, help='number of epochs to train')
