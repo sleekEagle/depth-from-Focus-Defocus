@@ -176,11 +176,11 @@ class DFFNet(nn.Module):
         camconstlist=[]
 
         for i in range(self.numdatasets):
-            a=torch.repeat_interleave(self.cameraparam["camera{}".format(0)][0],dataset.shape[0])
+            a=torch.repeat_interleave(self.cameraparam["camera{}".format(i)][0],dataset.shape[0])
             a[(dataset!=i).nonzero(as_tuple=True)[0]]=1
             a=a.view(-1,1,1,1)
             a=torch.repeat_interleave(a,focal_dist.shape[1],dim=1)
-            f=torch.repeat_interleave(self.cameraparam["camera{}".format(0)][1],dataset.shape[0]).view(-1,1)
+            f=torch.repeat_interleave(self.cameraparam["camera{}".format(i)][1],dataset.shape[0]).view(-1,1)
             f=torch.repeat_interleave(f,focal_dist.shape[1],dim=1)
             fdf=(focal_dist-f)
             fdf[(dataset!=i).nonzero(as_tuple=True)[0],:]=1
