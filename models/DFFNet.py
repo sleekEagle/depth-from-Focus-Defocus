@@ -180,8 +180,10 @@ class DFFNet(nn.Module):
             a[(dataset!=i).nonzero(as_tuple=True)[0]]=1
             a=a.view(-1,1,1,1)
             a=torch.repeat_interleave(a,focal_dist.shape[1],dim=1)
+            a=torch.abs(a)
             f=torch.repeat_interleave(self.cameraparam["camera{}".format(i)][1],dataset.shape[0]).view(-1,1)
             f=torch.repeat_interleave(f,focal_dist.shape[1],dim=1)
+            f=torch.abs(f)
             fdf=(focal_dist-f)
             fdf[(dataset!=i).nonzero(as_tuple=True)[0],:]=1
             fdf=fdf.view(fdf.shape[0],fdf.shape[1],1,1)
