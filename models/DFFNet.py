@@ -257,9 +257,9 @@ class DFFNet(nn.Module):
 
 '''
 model=DFFNet(clean=0,level=4)
-stack=torch.rand(6,5,3,224,224)
+stack=torch.rand(1,5,3,224,224)
 focal_dist=torch.tensor([0.1,0.2,0.3,0.4,0.5]).view(1,-1)
-focal_dist=torch.repeat_interleave(focal_dist,6,0)
+focal_dist=torch.repeat_interleave(focal_dist,1,0)
 dataset=torch.tensor([0,1,2,1,1,0], dtype=torch.long)
 out=model(stack,focal_dist,dataset)
 '''

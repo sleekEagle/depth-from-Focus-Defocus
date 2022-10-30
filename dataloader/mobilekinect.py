@@ -12,13 +12,9 @@ import OpenEXR
 from os import listdir, mkdir
 from os.path import isfile, join, isdir
 import cv2
-from dataloader import CameraLens
-
 
 # code adopted from https://github.com/soyers/ddff-pytorch/blob/master/python/ddff/dataproviders/datareaders/FocalStackDDFFH5Reader.py
 
-img_dpt_path=r'C:\Users\lahir\fstack_data\data_processed\10_19_2022_15_39_37\depth.png'
-img_dpt_path=r'C:\Users\lahir\focusdata\fs_6\fs_6\000000Dpt.exr'
 def read_dpt(img_dpt_path):
     im = cv2.imread(img_dpt_path,-1)
     return im
@@ -43,7 +39,6 @@ class ImageDataset(torch.utils.data.Dataset):
         self.flag_out_coc = flag_outputs[0]
         self.flag_out_depth = flag_outputs[1]
                 
-        self.camera=CameraLens(2.9*1e-3,f_number=1)
         self.max_dpt=max_dpt
 
 
@@ -74,15 +69,20 @@ class ImageDataset(torch.utils.data.Dataset):
         imgdirs=[f.split('\\')[-2] for f in self.imglist_all]
         imgpaths=[self.imglist_all[i] for i,item in enumerate(imgdirs) if item==idxdir]
         foc_dist=[float(f.split('\\')[-1].split('_')[-1][:-4]) for f in imgpaths]
-        print(foc_dist)
-        
+        '''
+        foc_dist=[2.0, 0.89, 0.57, 3.29, 1.1, 0.66, 0.75, 1.4, 10.0, 0.49]
+        foc_dist.sort()
+        imgpaths=['C:\\Users\\lahir\\fstack_data\\data_processed\\10_19_2022_15_39_37\\10_19_2022_15_39_38.764175_2.0.png', 'C:\\Users\\lahir\\fstack_data\\data_processed\\10_19_2022_15_39_37\\10_19_2022_15_39_39.016790_0.89.png', 'C:\\Users\\lahir\\fstack_data\\data_processed\\10_19_2022_15_39_37\\10_19_2022_15_39_39.551168_0.57.png', 'C:\\Users\\lahir\\fstack_data\\data_processed\\10_19_2022_15_39_37\\10_19_2022_15_39_39.817852_3.29.png', 'C:\\Users\\lahir\\fstack_data\\data_processed\\10_19_2022_15_39_37\\10_19_2022_15_39_40.075090_1.1.png', 'C:\\Users\\lahir\\fstack_data\\data_processed\\10_19_2022_15_39_37\\10_19_2022_15_39_40.328020_0.66.png', 'C:\\Users\\lahir\\fstack_data\\data_processed\\10_19_2022_15_39_37\\10_19_2022_15_39_41.119419_0.75.png', 'C:\\Users\\lahir\\fstack_data\\data_processed\\10_19_2022_15_39_37\\10_19_2022_15_39_41.904925_1.4.png', 'C:\\Users\\lahir\\fstack_data\\data_processed\\10_19_2022_15_39_37\\10_19_2022_15_39_43.753240_10.0.png', 'C:\\Users\\lahir\\fstack_data\\data_processed\\10_19_2022_15_39_37\\10_19_2022_15_39_44.801376_0.49.png']
+        imgpaths=["a", "b", "c", "d", "e", "f", "g", "h", "i","j"]
+        '''
+        imgpaths = [x for _,x in sorted(zip(foc_dist,imgpaths),reverse=True)]
+        foc_dist=sorted(foc_dist,reverse=True)
+
         #img_dpt=img_dpt/self.max_dpt
         mat_dpt = img_dpt.copy()[:, :, np.newaxis]
-        print(mat_dpt.shape)
         
         # add RGB, CoC, Depth inputs
         mats_input = []
-        blur_list=[]
         mats_output = np.zeros((256, 256, 0))
         foc_selected=[]
 
@@ -96,39 +96,23 @@ class ImageDataset(torch.utils.data.Dataset):
             mat_all = (mat_all - self.img_mean) / self.img_std
             mats_input.append(mat_all)  
             foc_selected.append(fdist)
-            
-            
-            #calc CoC images
-            blur=self.camera.get_coc(fdist,img_dpt)
-            blur = np.clip(blur, 0, 1.272e-4) / 1.272e-4
-            blur_list.append(blur)
     
-        mats_input=np.stack(mats_input)
-        print(mats_input.shape)
-        print('foc selected : ',foc_selected)
-        
-        blur_list=np.stack(blur_list)
-        print('blue shape:',str(blur_list.shape))
-                
-        sample = {'input': mats_input, 'output': mat_dpt,'blur':blur_list}
-        print('before trans...')
+        mats_input=np.stack(mats_input)        
+        sample = {'input': mats_input, 'output': mat_dpt}
         if self.transform_fnc:
             sample = self.transform_fnc(sample)
         #devide depth by 1000 to get m
-        return sample['input'],sample['output']/1000,sample['blur'],foc_dist
-
+        return sample['input'],sample['output']/1000,(1/torch.tensor(foc_dist)),2
 
 class ToTensor(object):
     def __call__(self, sample):
-        mats_input,mats_output,blur = sample['input'], sample['output'],sample['blur']
+        mats_input,mats_output = sample['input'], sample['output']
         mats_input=mats_input.transpose((0, 3, 1, 2))
-        blur=blur.transpose((0, 1, 2))
         mats_output=mats_output.transpose((2, 0, 1))
         mats_output=mats_output.astype(np.float32)
         # print(mats_input.shape, mats_output.shape)
         return {'input': torch.from_numpy(mats_input).float(),
-                'output': torch.from_numpy(mats_output).float(),
-               'blur':torch.from_numpy(blur).float()}
+                'output': torch.from_numpy(mats_output).float()}
 
 class RandomCrop(object):
     """ Randomly crop images
@@ -141,7 +125,7 @@ class RandomCrop(object):
             self.size = size
 
     def __call__(self, sample):
-        inputs,target,blur = sample['input'], sample['output'],sample['blur']
+        inputs,target = sample['input'], sample['output']
         n, h, w, _ = inputs.shape
         th, tw = self.size
         if w < tw: tw=w
@@ -150,11 +134,9 @@ class RandomCrop(object):
         x1 = random.randint(0, w - tw)
         y1 = random.randint(0, h - th)
         inputs=inputs[:, y1: y1 + th,x1: x1 + tw]
-        blur=blur[:, y1: y1 + th,x1: x1 + tw]
         target=target[y1: y1 + th,x1: x1 + tw]
         return {'input':inputs,
-                'output':target,
-                'blur':blur}
+                'output':target}
 
 
 class RandomFilp(object):
@@ -165,29 +147,24 @@ class RandomFilp(object):
         self.ratio = ratio
 
     def __call__(self, sample):
-        inputs,target,blur = sample['input'], sample['output'],sample['blur']
+        inputs,target = sample['input'], sample['output']
 
         # hori filp
         if np.random.binomial(1, self.ratio):
             inputs=inputs[:,:, ::-1]
             target=target[:,::-1]
-            blur=blur[:,:, ::-1]
 
         # vert flip
         if np.random.binomial(1, self.ratio):
             inputs=inputs[:, ::-1]
             target=target[::-1]
-            blur=blur[:, ::-1]
-        return {'input': np.ascontiguousarray(inputs), 'output': np.ascontiguousarray(target),'blur': np.ascontiguousarray(blur)}
-
-
-data_dir=r'C:\Users\lahir\fstack_data\data_processed'
+        return {'input': np.ascontiguousarray(inputs), 'output': np.ascontiguousarray(target)}
 
 def MobileKinectLoader(data_dir):
     dirs=listdir(data_dir)
     dirs.sort()
-    train_dirs=dirs[:3]
-    val_dirs=dirs[3:]
+    train_dirs=dirs[:200]
+    val_dirs=dirs[200:]
 
     dpth_train_list=[join(data_dir,d,f) for d in train_dirs for f in listdir(join(data_dir,d)) if isfile(join(data_dir,d,f)) and f.split('.')[0]=="depth"]
     dpth_val_list=[join(data_dir,d,f) for d in val_dirs for f in listdir(join(data_dir,d)) if isfile(join(data_dir,d,f)) and f.split('.')[0]=="depth"]
@@ -208,14 +185,25 @@ def MobileKinectLoader(data_dir):
  
     dataset_train = ImageDataset(img_list=img_train_list, dpth_list=dpth_train_list,
                                  transform_fnc=train_transform)
-    it=iter(dataset_valid)
-    a,b,c,d=next(it)
 
-    val_transform = transforms.Compose([ToTensor()])
+    val_transform = transforms.Compose([
+                        RandomCrop(224),
+                        ToTensor()])
+
     dataset_valid = ImageDataset(img_list=img_val_list, dpth_list=dpth_val_list,
                                  transform_fnc=val_transform)
 
-
     return dataset_train, dataset_valid
 
-path=r'C:\Users\lahir\Documents\CPR Quality Data\CoolTerm Capture 2022-10-20 15-08-48.txt'
+'''
+data_dir='C:\\Users\\lahir\\fstack_data\\data_processed'
+dataset_train, dataset_validation = MobileKinectLoader(data_dir)
+TrainImgLoader = torch.utils.data.DataLoader(dataset=dataset_train, num_workers=0, batch_size=2, shuffle=True, drop_last=True)
+#gtlist=torch.empty(0,1,224,224)
+
+gtlist=torch.empty(0,10,3,224,224)
+for batch_idx, (img_stack, gt_disp,foc_dist,dataset) in enumerate(TrainImgLoader):
+    print(img_stack.shape)
+    continue
+    #gtlist=torch.cat((gtlist,img_stack),0)
+'''

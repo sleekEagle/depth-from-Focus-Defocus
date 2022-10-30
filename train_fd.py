@@ -217,10 +217,10 @@ def main():
         train_log.scalar_summary('lr_epoch', lr_, epoch)
 
         ## training ##
-        #gtlist=torch.empty(0,1,224,224)
+        #gtlist=torch.empty(0,5,3,224,224)
         for batch_idx, (img_stack, gt_disp,foc_dist,dataset) in enumerate(TrainImgLoader):
             start_time = time.time()
-            #gtlist=torch.cat((gtlist,gt_disp),0)
+            #gtlist=torch.cat((gtlist,img_stack),0)
             loss,dloss,bloss,viz=train(img_stack,gt_disp,foc_dist,dataset)
             if total_iters %10 == 0:
                 torch.cuda.synchronize()
